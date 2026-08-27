@@ -1,0 +1,21 @@
+app:
+  name: NETRA-AI
+  debug: true
+  port: 5000
+  secret_key: netra-dev-key-change-in-prod
+  default_language: en
+  supported_languages: [en, hi, ta, te]
+
+modules:
+  iqa: stub
+  grading: stub
+  segmentation: stub
+  xai: stub
+
+runtime: onnx  # onnx | matlab
+
+paths:
+  captures: data/captures
+  models: artifacts/models
+  reports: data/reports
+  db: db/netra.db

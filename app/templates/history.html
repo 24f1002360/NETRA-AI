@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card history-card">
+    <div class="history-header">
+        <h2 class="page-title">{{ t('history.title') }}: {{ patient_id }}</h2>
+        <div class="trend-indicator trend-{{ trend|lower|replace(' ', '-') }}">
+            {% if trend == 'Worsening' %}
+                <span class="trend-icon">↑</span> <span class="trend-label">{{ t('history.trend.worsening') }}</span>
+            {% elif trend == 'Improving' %}
+                <span class="trend-icon">↓</span> <span class="trend-label">{{ t('history.trend.improving') }}</span>
+            {% elif trend == 'Stable' %}
+                <span class="trend-icon">→</span> <span class="trend-label">{{ t('history.trend.stable') }}</span>
+            {% else %}
+                <span class="trend-icon">-</span> <span class="trend-label">{{ t('history.trend.first_visit') }}</span>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if screenings %}
+    <div class="table-responsive">
+        <table class="history-table">
+            <thead>
+                <tr>
+                    <th>{{ t('history.date') }}</th>
+                    <th>{{ t('history.eye') }}</th>
+                    <th>{{ t('history.grade') }}</th>
+                    <th>{{ t('history.confidence') }}</th>
+                    <th>{{ t('history.action') }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for screening in screenings %}
+                <tr onclick="window.location='{{ url_for('result', id=screening.id) }}'" class="clickable-row">
+                    <td>{{ screening.date }}</td>
+                    <td>{{ screening.eye }}</td>
+                    <td>
+                        <span class="badge badge-grade-{{ screening.grade }}">
+                            Grade {{ screening.grade }}
+                        </span>
+                    </td>
+                    <td>{{ (screening.confidence * 100)|round(1) }}%</td>
+                    <td>{{ t('history.action.' ~ screening.action|lower) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <p>{{ t('history.no_records') }}</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

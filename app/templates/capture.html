@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card capture-card">
+    <form action="{{ url_for('capture_upload') }}" method="POST" enctype="multipart/form-data">
+        <div class="patient-info">
+            <div class="form-group">
+                <label for="patient_id">{{ t('capture.patient_id') }}</label>
+                <input type="text" id="patient_id" name="patient_id" required class="large-input" value="{{ request.args.get('patient_id', '') }}">
+            </div>
+            <div class="operator-display">
+                <span class="operator-label">{{ t('capture.operator_id') }}:</span>
+                <span class="operator-id">{{ operator_id | default('ASHA-001') }}</span>
+            </div>
+        </div>
+
+        <div class="eye-selector">
+            <label>{{ t('capture.eye_select') }}</label>
+            <div class="eye-buttons">
+                <button type="button" class="eye-btn {{ 'selected' if request.args.get('eye') == 'OD' }}" data-eye="OD">{{ t('capture.eye_od') }} (Right)</button>
+                <button type="button" class="eye-btn {{ 'selected' if request.args.get('eye') == 'OS' }}" data-eye="OS">{{ t('capture.eye_os') }} (Left)</button>
+            </div>
+            <input type="hidden" id="eye-input" name="eye" value="{{ request.args.get('eye', 'OD') }}">
+        </div>
+
+        <div class="capture-section">
+            <button type="button" class="btn btn-capture" onclick="document.getElementById('image-upload').click()">
+                <span class="camera-icon">📷</span>
+                <span class="capture-text">{{ t('capture.button') }}</span>
+            </button>
+            <input type="file" id="image-upload" name="image" accept="image/*" capture="environment" style="display: none;">
+            <img id="upload-preview" class="image-preview" style="display: none;" alt="Preview">
+        </div>
+        
+        <div class="voice-prompt-area">
+            <p class="prompt-text">{{ t('capture.prompt.position') }}</p>
+            <button type="button" class="btn-icon" onclick="playAudio('capture.prompt.position', '{{ lang }}')">🔊</button>
+        </div>
+
+        <div class="upload-alternative">
+            <label for="image-upload-alt">{{ t('capture.upload_alt') }}</label>
+            <input type="file" id="image-upload-alt" name="image_alt" accept="image/*">
+        </div>
+        
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary btn-large">Submit</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

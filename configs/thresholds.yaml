@@ -1,0 +1,22 @@
+iqa:
+  hard_threshold:
+    blur: 0.3
+    illumination: 0.25
+    fov_coverage: 0.6
+    contrast: 0.2
+    artefact: 0.4
+  soft_threshold:
+    blur: 0.6
+    illumination: 0.5
+    fov_coverage: 0.8
+    contrast: 0.5
+    artefact: 0.15
+
+routing:
+  urgent_referral:
+    min_grade: 4
+    grade3_min_confidence: 0.7
+  review:
+    min_grade: 2
+    min_confidence: 0.55
+  routine: {}

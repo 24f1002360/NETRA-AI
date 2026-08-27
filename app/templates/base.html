@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ t('app.title') }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+</head>
+<body>
+    <header>
+        <div class="header-left">
+            <h1 class="app-logo">👁 {{ t('app.title') }}</h1>
+        </div>
+        <nav>
+            <a href="{{ url_for('capture') }}" class="nav-link {{ 'active' if active_page == 'capture' }}">{{ t('nav.capture') }}</a>
+            <a href="{{ url_for('history', patient_id='') }}" class="nav-link {{ 'active' if active_page == 'history' }}">{{ t('nav.history') }}</a>
+        </nav>
+        <div class="header-right">
+            <select id="lang-switcher" class="lang-select">
+                {% for l in languages %}
+                <option value="{{ l }}" {{ 'selected' if l == lang }}>{{ l|upper }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </header>
+    
+    <main>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category }}">{{ message }}</div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+        
+        {% block content %}{% endblock %}
+    </main>
+    
+    <audio id="voice-prompt" preload="auto"></audio>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>
