@@ -31,7 +31,7 @@
             </thead>
             <tbody>
                 {% for screening in screenings %}
-                <tr onclick="window.location='{{ url_for('result', id=screening.id) }}'" class="clickable-row">
+                <tr onclick="window.location='{{ url_for('main.result', screening_id=screening.screening_id) }}'" class="clickable-row">
                     <td>{{ screening.date }}</td>
                     <td>{{ screening.eye }}</td>
                     <td>

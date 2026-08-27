@@ -58,9 +58,9 @@
 
     <div class="actions">
         {% if result.quality.verdict == 'RETAKE' %}
-            <a href="{{ url_for('capture', patient_id=result.patient_id, eye=result.eye) }}" class="btn btn-danger btn-large btn-full">{{ t('iqa.retake.button') }}</a>
+            <a href="{{ url_for('main.capture', patient_id=result.patient_id, eye=result.eye) }}" class="btn btn-danger btn-large btn-full">{{ t('iqa.retake.button') }}</a>
         {% else %}
-            <a href="{{ url_for('result', id=result.id) }}" class="btn btn-success btn-large btn-full">{{ t('iqa.continue') }}</a>
+            <a href="{{ url_for('main.result', screening_id=result.screening_id) }}" class="btn btn-success btn-large btn-full">{{ t('iqa.continue') }}</a>
         {% endif %}
     </div>
 </div>
