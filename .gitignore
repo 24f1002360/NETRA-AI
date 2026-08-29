@@ -29,3 +29,4 @@ matlab/compiled/*
 .DS_Store
 .vscode/
 .idea/
+!sim/results/*.png
