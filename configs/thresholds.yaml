@@ -1,0 +1,23 @@
+
+
+iqa:
+ 
+  blur:         {hard: 0.25, soft: 0.45}
+  illumination: {hard: 0.30, soft: 0.50}
+  fov_coverage: {hard: 0.45, soft: 0.65}
+  contrast:     {hard: 0.25, soft: 0.45}
+
+  centre_offset_max: 0.35     
+  blur_ref_variance: 900.0    
+  clip_frac_max: 0.10        
+
+enhance:
+  clip_limit: 2.5
+  tile_grid: [8, 8]
+  correct_illumination: true
+
+
+routing:
+  urgent_grade: 4
+  referable_grade: 2
+  low_confidence: 0.55
