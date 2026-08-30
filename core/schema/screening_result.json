@@ -1,0 +1,180 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ScreeningResult",
+  "description": "NETRA AI screening result. One block per module owner. See docs/01_INTERFACE_CONTRACTS.md",
+  "type": "object",
+  "required": [
+    "schema_version", "screening_id", "patient_id", "captured_at", "eye",
+    "image", "quality", "grading", "lesions", "xai",
+    "other_conditions", "longitudinal", "routing", "timings_ms"
+  ],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "screening_id":   { "type": "string" },
+    "patient_id":     { "type": "string" },
+    "captured_at":    { "type": "string" },
+    "eye":            { "type": "string", "enum": ["OD", "OS"] },
+    "operator_id":    { "type": ["string", "null"] },
+    "phc_id":         { "type": ["string", "null"] },
+
+    "image": {
+      "type": "object",
+      "required": ["raw_path", "processed_path", "width", "height"],
+      "properties": {
+        "raw_path":       { "type": "string" },
+        "processed_path": { "type": ["string", "null"] },
+        "width":          { "type": "integer" },
+        "height":         { "type": "integer" },
+        "fov_mask_path":  { "type": ["string", "null"] }
+      }
+    },
+
+    "quality": {
+      "description": "OWNER: Ishank (covering the image-processing role)",
+      "type": "object",
+      "required": ["verdict", "scores", "reasons", "operator_message_key",
+                   "enhancement_applied"],
+      "properties": {
+        "verdict": { "type": "string",
+                     "enum": ["PASS", "AUTO_CORRECTED", "RETAKE"] },
+        "scores": {
+          "type": "object",
+          "required": ["blur", "illumination", "fov_coverage", "contrast",
+                       "centre_offset"],
+          "properties": {
+            "blur":          { "type": "number", "minimum": 0, "maximum": 1 },
+            "illumination":  { "type": "number", "minimum": 0, "maximum": 1 },
+            "fov_coverage":  { "type": "number", "minimum": 0, "maximum": 1 },
+            "contrast":      { "type": "number", "minimum": 0, "maximum": 1 },
+            "centre_offset": { "type": "number", "minimum": 0, "maximum": 1 }
+          },
+          "additionalProperties": false
+        },
+        "reasons": {
+          "type": "array",
+          "items": { "type": "string",
+                     "enum": ["BLUR_HIGH", "TOO_DARK", "TOO_BRIGHT",
+                              "FOV_PARTIAL", "LOW_CONTRAST", "OFF_CENTRE"] }
+        },
+        "operator_message_key": { "type": "string" },
+        "enhancement_applied":  { "type": "array", "items": { "type": "string" } },
+        "processing_ms":        { "type": "integer" },
+        "work_size": { "type": "array", "items": { "type": "integer" },
+                       "minItems": 2, "maxItems": 2 }
+      }
+    },
+
+    "grading": {
+      "description": "OWNER: Kanchan",
+      "type": "object",
+      "required": ["icdr_grade", "grade_label", "probabilities",
+                   "referable_dr", "confidence", "uncertain"],
+      "properties": {
+        "icdr_grade":  { "type": ["integer", "null"], "minimum": 0, "maximum": 4 },
+        "grade_label": { "type": ["string", "null"] },
+        "probabilities": { "type": "array", "items": { "type": "number" },
+                           "minItems": 5, "maxItems": 5 },
+        "referable_dr":  { "type": "boolean" },
+        "confidence":    { "type": "number", "minimum": 0, "maximum": 1 },
+        "uncertain":     { "type": "boolean" },
+        "model_id":      { "type": ["string", "null"] },
+        "model_version": { "type": ["string", "null"] }
+      }
+    },
+
+    "lesions": {
+      "description": "OWNER: Kanchan. Null when segmentation is skipped or fails.",
+      "type": ["object", "null"],
+      "properties": {
+        "mask_path": { "type": ["string", "null"] },
+        "counts": {
+          "type": "object",
+          "properties": {
+            "microaneurysms": { "type": "integer" },
+            "haemorrhages":   { "type": "integer" },
+            "hard_exudates":  { "type": "integer" },
+            "soft_exudates":  { "type": "integer" }
+          }
+        },
+        "area_fraction": { "type": "object" },
+        "model_version": { "type": ["string", "null"] }
+      }
+    },
+
+    "xai": {
+      "description": "OWNER: Anshika",
+      "type": ["object", "null"],
+      "properties": {
+        "gradcam_path":            { "type": ["string", "null"] },
+        "overlay_path":            { "type": ["string", "null"] },
+        "cam_lesion_agreement":    { "type": ["number", "null"] },
+        "cam_outside_fov_fraction":{ "type": ["number", "null"] },
+        "guard_status": { "type": "string",
+                          "enum": ["OK", "CAM_OFF_RETINA", "LOW_AGREEMENT"] }
+      }
+    },
+
+    "other_conditions": {
+      "type": "object",
+      "properties": {
+        "glaucoma_suspect": {
+          "type": "object",
+          "properties": {
+            "cup_disc_ratio": { "type": ["number", "null"] },
+            "flag":           { "type": "boolean" }
+          }
+        },
+        "hypertensive_retinopathy": {
+          "type": "object",
+          "properties": {
+            "flag":     { "type": "boolean" },
+            "evidence": { "type": "array" }
+          }
+        }
+      }
+    },
+
+    "longitudinal": {
+      "description": "OWNER: Divyanshu",
+      "type": "object",
+      "required": ["trend"],
+      "properties": {
+        "prior_screening_id": { "type": ["string", "null"] },
+        "prior_grade":        { "type": ["integer", "null"] },
+        "delta":              { "type": ["string", "null"] },
+        "trend": { "type": "string",
+                   "enum": ["IMPROVING", "STABLE", "WORSENING", "FIRST_VISIT"] }
+      }
+    },
+
+    "routing": {
+      "description": "OWNER: Divyanshu",
+      "type": "object",
+      "required": ["action", "reason"],
+      "properties": {
+        "action": { "type": "string",
+                    "enum": ["ROUTINE", "REVIEW", "URGENT_REFERRAL"] },
+        "reason":      { "type": "string" },
+        "alert_sent":  { "type": "boolean" },
+        "sync_status": { "type": "string",
+                         "enum": ["PENDING", "SYNCED", "FAILED"] }
+      }
+    },
+
+    "timings_ms": {
+      "type": "object",
+      "required": ["total"],
+      "properties": {
+        "iqa":          { "type": "number" },
+        "grading":      { "type": "number" },
+        "segmentation": { "type": "number" },
+        "xai":          { "type": "number" },
+        "report":       { "type": "number" },
+        "db":           { "type": "number" },
+        "total":        { "type": "number" }
+      }
+    }
+  },
+
+  "additionalProperties": false
+}

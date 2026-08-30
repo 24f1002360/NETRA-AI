@@ -21,7 +21,7 @@ import numpy as np
 import yaml
 
 from .fov import extract_fov
-from .enhance import enhance, enhancement_names
+from .enhance import enhance, enhancement_names, resize_for_processing, WORK_MAX_DIM
 
 DEFAULT_THRESHOLDS = {
     "blur":         {"hard": 0.25, "soft": 0.45},
@@ -130,7 +130,7 @@ def _reasons(scores, info, thr):
     return out
 
 
-def assess_quality(bgr, thresholds=None, fov_mask_path=None):
+def assess_quality(bgr, thresholds=None, fov_mask_path=None, max_dim=WORK_MAX_DIM):
     """
     Contract function. Returns the `quality` block.
 
@@ -138,13 +138,22 @@ def assess_quality(bgr, thresholds=None, fov_mask_path=None):
         bgr: HxWx3 uint8 BGR image
         thresholds: dict, defaults to configs/thresholds.yaml
         fov_mask_path: if given, the FOV mask is written here (Anshika needs it)
+        max_dim: working resolution cap. Raw fundus captures are ~4288x2848;
+                 scoring at that size takes ~18 s and blows the 1.5 s budget.
+                 At 1024 it is a few hundred ms with no loss of signal.
 
     Returns:
         dict matching the `quality` block in 01_INTERFACE_CONTRACTS.md,
-        plus a private "_mask" key holding the FOV mask array.
+        plus a private "_mask" key holding the FOV mask array (at the
+        working resolution, which is also what enhance() and xai.explain()
+        operate on).
     """
     t0 = time.time()
     thr = thresholds or load_thresholds()
+
+    # Everything downstream — scoring, enhancement, the mask handed to
+    # Anshika's Grad-CAM guard — works at this resolution.
+    bgr = resize_for_processing(bgr, max_dim)
 
     scores, mask, info = _score_all(bgr, thr)
     g_inside = bgr[:, :, 1][mask > 0]
@@ -193,5 +202,6 @@ def assess_quality(bgr, thresholds=None, fov_mask_path=None):
         "operator_message_key": msg_key,
         "enhancement_applied": applied,
         "processing_ms": int((time.time() - t0) * 1000),
+        "work_size": [int(bgr.shape[1]), int(bgr.shape[0])],
         "_mask": mask,          # private, not serialised to JSON
     }
