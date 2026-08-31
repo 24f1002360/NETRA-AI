@@ -38,6 +38,12 @@ DEFAULT_WEIGHTS = (
     / "netra_dr_effb0_muskan_preproc.pth"
 )
 
+# Last convolutional block for Grad-CAM (torchvision efficientnet_b0:
+# features[8] is the final 1x1 ConvNormActivation before avgpool).
+# Best current guess per GUIDE_4_Anshika.md Part 1 -- confirm with Kanchan
+# before treating this as final.
+GRADCAM_LAYER = "features.8"
+
 
 def build_model() -> nn.Module:
     """
@@ -154,13 +160,16 @@ class DRGrader:
             list(range(NUM_CLASSES)),
         )
 
-    @torch.inference_mode()
-    def predict(self, image: np.ndarray) -> dict:
-        """
-        Run production grading inference.
+        self.gradcam_layer = GRADCAM_LAYER
 
-        Input:
-            uint8 BGR image, H x W x 3.
+    def preprocess(self, image: np.ndarray) -> "torch.Tensor":
+        """
+        Shared NETRA preprocessing: enhance -> BGR2RGB -> training-compatible
+        resize -> normalize -> CHW batch tensor on self.device.
+
+        Exposed separately from predict() so core/xai/explain.py's GradCAM
+        can run the exact same preprocessing on the exact same model
+        (model_handle["preprocess"] in the real XAI contract).
         """
 
         if image is None:
@@ -217,7 +226,18 @@ class DRGrader:
             rgb.transpose(2, 0, 1)
         ).float().unsqueeze(0)
 
-        tensor = tensor.to(self.device)
+        return tensor.to(self.device)
+
+    @torch.inference_mode()
+    def predict(self, image: np.ndarray) -> dict:
+        """
+        Run production grading inference.
+
+        Input:
+            uint8 BGR image, H x W x 3.
+        """
+
+        tensor = self.preprocess(image)
 
         # ----------------------------------------------------------
         # Inference
