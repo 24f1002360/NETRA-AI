@@ -1,50 +1,222 @@
 {% extends "base.html" %}
+{% block title %}Capture — {{ t('app.title') }}{% endblock %}
 
 {% block content %}
-<div class="card capture-card">
-    <form action="{{ url_for('main.capture_upload') }}" method="POST" enctype="multipart/form-data">
-        <div class="patient-info">
-            <div class="form-group">
-                <label for="patient_id">{{ t('capture.patient_id') }}</label>
-                <input type="text" id="patient_id" name="patient_id" required class="large-input" value="{{ request.args.get('patient_id', '') }}">
-            </div>
-            <div class="operator-display">
-                <span class="operator-label">{{ t('capture.operator_id') }}:</span>
-                <span class="operator-id">{{ operator_id | default('ASHA-001') }}</span>
-            </div>
-        </div>
-
-        <div class="eye-selector">
-            <label>{{ t('capture.eye_select') }}</label>
-            <div class="eye-buttons">
-                <button type="button" class="eye-btn {{ 'selected' if request.args.get('eye') == 'OD' }}" data-eye="OD">{{ t('capture.eye_od') }} (Right)</button>
-                <button type="button" class="eye-btn {{ 'selected' if request.args.get('eye') == 'OS' }}" data-eye="OS">{{ t('capture.eye_os') }} (Left)</button>
-            </div>
-            <input type="hidden" id="eye-input" name="eye" value="{{ request.args.get('eye', 'OD') }}">
-        </div>
-
-        <div class="capture-section">
-            <button type="button" class="btn btn-capture" onclick="document.getElementById('image-upload').click()">
-                <span class="camera-icon">📷</span>
-                <span class="capture-text">{{ t('capture.button') }}</span>
-            </button>
-            <input type="file" id="image-upload" name="image" accept="image/*" capture="environment" style="display: none;">
-            <img id="upload-preview" class="image-preview" style="display: none;" alt="Preview">
-        </div>
-        
-        <div class="voice-prompt-area">
-            <p class="prompt-text">{{ t('capture.prompt.position') }}</p>
-            <button type="button" class="btn-icon" onclick="playAudio('capture.prompt.position', '{{ lang }}')">🔊</button>
-        </div>
-
-        <div class="upload-alternative">
-            <label for="image-upload-alt">{{ t('capture.upload_alt') }}</label>
-            <input type="file" id="image-upload-alt" name="image_alt" accept="image/*">
-        </div>
-        
-        <div class="form-actions">
-            <button type="submit" class="btn btn-primary btn-large">Submit</button>
-        </div>
-    </form>
+<!-- Step indicator -->
+<div class="step-indicator" role="list" aria-label="Screening steps">
+  <div class="step active" role="listitem">
+    <div class="step__dot">1</div>
+    <span class="step__name">Capture</span>
+  </div>
+  <div class="step__line"></div>
+  <div class="step" role="listitem">
+    <div class="step__dot">2</div>
+    <span class="step__name">Quality</span>
+  </div>
+  <div class="step__line"></div>
+  <div class="step" role="listitem">
+    <div class="step__dot">3</div>
+    <span class="step__name">Result</span>
+  </div>
 </div>
+
+<!-- Status row -->
+<div class="status-row" role="status" aria-live="polite">
+  <div class="status-chip ok" id="status-offline">
+    <span class="status-chip__dot"></span>
+    Offline Mode
+  </div>
+  <div class="status-chip" id="status-camera">
+    <span class="status-chip__dot"></span>
+    <span id="camera-status-text">Checking camera…</span>
+  </div>
+</div>
+
+<div class="card">
+  <h1 class="page-title">New Screening</h1>
+  <p class="page-subtitle">Complete all steps below before capturing the image.</p>
+
+  <form action="{{ url_for('main.capture_upload') }}" method="POST"
+        enctype="multipart/form-data" id="capture-form" novalidate>
+
+    <!-- Patient ID -->
+    <div class="form-group">
+      <label class="form-label" for="patient_id">
+        {{ t('capture.patient_id') }}
+      </label>
+      <input type="text"
+             id="patient_id"
+             name="patient_id"
+             class="form-input"
+             placeholder="{{ t('capture.patient_id.placeholder') }}"
+             value="{{ request.args.get('patient_id', '') }}"
+             autocomplete="off"
+             required
+             aria-required="true"
+             aria-describedby="pid-hint">
+      <p id="pid-hint" class="text-subtle mt-s" style="font-size:.82rem">
+        Example: PHC12-0043 &nbsp;·&nbsp; ASHA-0192
+      </p>
+    </div>
+
+    <!-- Eye selector -->
+    <div class="eye-selector">
+      <span class="eye-label">{{ t('capture.eye_select') }}</span>
+      <div class="eye-buttons" role="group" aria-label="{{ t('capture.eye_select') }}">
+        <button type="button"
+                class="eye-btn {% if request.args.get('eye', 'OD') == 'OD' %}selected{% endif %}"
+                id="eye-btn-od"
+                data-eye="OD"
+                aria-pressed="{% if request.args.get('eye', 'OD') == 'OD' %}true{% else %}false{% endif %}">
+          <span class="eye-glyph">👁</span>
+          <span>{{ t('capture.eye_od') }}</span>
+          <span class="eye-tag">Right — OD</span>
+        </button>
+        <button type="button"
+                class="eye-btn {% if request.args.get('eye') == 'OS' %}selected{% endif %}"
+                id="eye-btn-os"
+                data-eye="OS"
+                aria-pressed="{% if request.args.get('eye') == 'OS' %}true{% else %}false{% endif %}">
+          <span class="eye-glyph">👁</span>
+          <span>{{ t('capture.eye_os') }}</span>
+          <span class="eye-tag">Left — OS</span>
+        </button>
+      </div>
+      <input type="hidden" id="eye-input" name="eye"
+             value="{{ request.args.get('eye', 'OD') }}">
+    </div>
+
+    <!-- Capture zone -->
+    <div class="capture-zone">
+      <p class="capture-zone__hint">
+        Position the camera <strong>5 cm</strong> from the eye, centred on the pupil.
+      </p>
+
+      <button type="button"
+              class="btn btn-primary btn-capture"
+              id="btn-trigger-capture"
+              onclick="document.getElementById('image-upload').click()">
+        <span class="cam-icon">📷</span>
+        <span>{{ t('capture.button') }}</span>
+        <span class="cam-sub">Tap to open camera</span>
+      </button>
+
+      <input type="file"
+             id="image-upload"
+             name="image"
+             accept="image/*"
+             capture="environment"
+             style="display:none;"
+             aria-label="Camera capture">
+
+      <div class="image-preview-wrap" id="preview-wrap">
+        <img class="image-preview" id="upload-preview" alt="Captured fundus preview">
+      </div>
+    </div>
+
+    <!-- File upload fallback -->
+    <div class="upload-divider">or upload existing image</div>
+    <label for="image-upload-alt" class="upload-zone" id="upload-dropzone">
+      <div style="font-size:1.8rem;margin-bottom:6px">📂</div>
+      <strong>{{ t('capture.upload_alt') }}</strong>
+      <div style="font-size:.8rem;margin-top:4px;color:var(--text-subtle)">
+        JPG, PNG — max 10 MB
+      </div>
+      <input type="file"
+             id="image-upload-alt"
+             name="image_alt"
+             accept="image/*"
+             style="display:none;"
+             aria-label="{{ t('capture.upload_alt') }}">
+    </label>
+
+    <!-- Form error display -->
+    <div id="form-error" class="flash error mt" style="display:none" role="alert"></div>
+
+    <!-- Submit -->
+    <div class="mt-l">
+      <button type="submit" id="btn-submit" class="btn btn-teal btn-xl">
+        Analyse Image →
+      </button>
+    </div>
+
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  // Camera status detection
+  const chipCam = document.getElementById('status-camera');
+  const camText = document.getElementById('camera-status-text');
+  if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+    navigator.mediaDevices.enumerateDevices().then(function(devices) {
+      const hasCamera = devices.some(d => d.kind === 'videoinput');
+      camText.textContent = hasCamera ? 'Camera ready' : 'No camera — use file upload';
+      chipCam.classList.toggle('ok', hasCamera);
+      chipCam.classList.toggle('warn', !hasCamera);
+    }).catch(function() {
+      camText.textContent = 'Camera status unknown';
+      chipCam.classList.add('warn');
+    });
+  } else {
+    camText.textContent = 'Camera not supported';
+    chipCam.classList.add('warn');
+  }
+
+  // Form validation
+  document.getElementById('capture-form').addEventListener('submit', function(e) {
+    const pid  = document.getElementById('patient_id').value.trim();
+    const eye  = document.getElementById('eye-input').value;
+    const imgA = document.getElementById('image-upload').files.length;
+    const imgB = document.getElementById('image-upload-alt').files.length;
+    const errEl = document.getElementById('form-error');
+
+    if (!pid) {
+      e.preventDefault();
+      errEl.textContent = '{{ t("error.no_patient_id") }}';
+      errEl.style.display = 'flex';
+      document.getElementById('patient_id').focus();
+      return;
+    }
+    if (!eye) {
+      e.preventDefault();
+      errEl.textContent = '{{ t("error.no_eye") }}';
+      errEl.style.display = 'flex';
+      return;
+    }
+    if (!imgA && !imgB) {
+      e.preventDefault();
+      errEl.textContent = '{{ t("error.no_image") }}';
+      errEl.style.display = 'flex';
+      return;
+    }
+    errEl.style.display = 'none';
+
+    // Loading feedback
+    const btn = document.getElementById('btn-submit');
+    btn.textContent = 'Analysing…';
+    btn.disabled = true;
+  });
+
+  // File upload → preview for alt input
+  document.getElementById('image-upload-alt').addEventListener('change', function() {
+    const file = this.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const wrap = document.getElementById('preview-wrap');
+      const img  = document.getElementById('upload-preview');
+      img.src = e.target.result;
+      wrap.classList.add('visible');
+    };
+    reader.readAsDataURL(file);
+    // Also push to main input so validation passes
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    document.getElementById('image-upload').files = dt.files;
+  });
+})();
+</script>
 {% endblock %}

@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Error — {{ t('app.title') }}{% endblock %}
+{% block content %}
+<div class="card" style="max-width:540px;margin:60px auto">
+  <div class="empty-state">
+    <div class="empty-state__icon">⚠️</div>
+    <h1 class="page-title" style="font-size:1.3rem">{{ title or 'Something went wrong' }}</h1>
+    <p class="page-subtitle">{{ detail or 'An unexpected error occurred. Please try again.' }}</p>
+    <div class="flex-center gap-s mt-l" style="justify-content:center">
+      <a href="{{ url_for('main.capture') }}" class="btn btn-teal">
+        Start New Screening
+      </a>
+      <a href="{{ url_for('main.history', patient_id='') }}" class="btn btn-ghost">
+        View History
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}
