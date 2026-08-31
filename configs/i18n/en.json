@@ -63,7 +63,7 @@
   "result.action.routine": "No action needed — rescreen in 12 months",
   "result.action.review": "Refer to specialist for review",
   "result.action.urgent": "URGENT: Immediate ophthalmologist referral required",
-  "result.download_pdf": "Download Report (PDF)",
+  "result.download_pdf": "View / Print Report",
 
   "history.title": "Screening History",
   "history.no_records": "No prior screenings found for this patient",

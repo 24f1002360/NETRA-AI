@@ -4,11 +4,10 @@ app/report.py — NETRA-AI clinical report generator.
 Owned by Abhishek (Part A).
 Contract:
     render_result(result: dict) -> str   # HTML string
-    generate_pdf(result: dict) -> str    # path to PDF/HTML file
 
-WeasyPrint is optional — if not installed, a well-formatted HTML
-file is generated instead and the caller is notified via the return
-path having a .html extension.  This keeps offline demos safe.
+Returns a well-formatted HTML document that can be viewed in the browser
+and printed to PDF natively by the user (Ctrl+P). This avoids the need for
+heavy GTK3 dependencies on Windows laptops.
 """
 from __future__ import annotations
 
@@ -220,32 +219,119 @@ def render_result(result: dict) -> str:
     return html
 
 
-def generate_pdf(result: dict) -> str:
-    """
-    Generate a clinical PDF report. Returns the path to the generated file.
+def _eye_section(result: dict, eye_label: str) -> str:
+    """Render one eye's section for the combined report."""
+    grading   = result.get("grading", {}) or {}
+    routing   = result.get("routing", {}) or {}
+    lesions   = (result.get("lesions", {}) or {}).get("counts", {}) or {}
+    xai       = result.get("xai", {}) or {}
 
-    Falls back to HTML if WeasyPrint is unavailable (keeps offline demos safe).
-    """
-    report_dir = os.path.join("data", "reports")
-    os.makedirs(report_dir, exist_ok=True)
+    grade       = grading.get("icdr_grade", 0) or 0
+    grade_label = GRADE_LABELS.get(grade, f"Grade {grade}")
+    confidence  = grading.get("confidence", 0.0) or 0.0
+    action_raw  = (routing.get("action") or "ROUTINE").upper()
+    action_label = ACTION_LABELS.get(action_raw, action_raw)
+    action_cls  = "urgent" if "URGENT" in action_raw else action_raw.lower()
 
-    sid = result.get("screening_id", "unknown")[:12]
-    html_content = render_result(result)
+    guard       = xai.get("guard_status", "—")
+    agreement   = xai.get("cam_lesion_agreement")
+    agreement_s = f"{agreement*100:.0f}%" if agreement is not None else "—"
 
-    try:
-        from weasyprint import HTML  # type: ignore
-        pdf_path = os.path.join(report_dir, f"{sid}_report.pdf")
-        HTML(string=html_content).write_pdf(pdf_path)
-        return pdf_path
-    except ImportError:
-        # WeasyPrint not installed — write HTML instead
-        html_path = os.path.join(report_dir, f"{sid}_report.html")
-        with open(html_path, "w", encoding="utf-8") as fh:
-            fh.write(html_content)
-        return html_path
-    except Exception:
-        # Any WeasyPrint runtime error → fall back to HTML
-        html_path = os.path.join(report_dir, f"{sid}_report.html")
-        with open(html_path, "w", encoding="utf-8") as fh:
-            fh.write(html_content)
-        return html_path
+    return f"""
+<div style="flex:1;min-width:260px">
+  <h3 style="font-size:12pt;margin:0 0 8px;color:#1f3a5f">{eye_label} ({result.get('eye', '—')})</h3>
+  <div class="decision {action_cls}" style="font-size:10pt;padding:8px 12px;margin-bottom:10px">
+    {action_label}
+  </div>
+  <div style="margin-bottom:8px">
+    <span class="grade-block grade-{grade}" style="font-size:16pt;padding:5px 12px">{grade}</span>
+    <strong>{grade_label}</strong> — Confidence: {confidence*100:.0f}%
+    {'<span class="badge badge-red">Referable</span>' if grading.get('referable_dr') else ''}
+  </div>
+  <table style="width:100%;margin-bottom:8px">
+    <tr><td style="padding:3px 6px;font-size:9pt">Microaneurysms</td><td style="padding:3px 6px;font-size:9pt;font-weight:bold">{lesions.get('microaneurysms', 0)}</td></tr>
+    <tr><td style="padding:3px 6px;font-size:9pt">Haemorrhages</td><td style="padding:3px 6px;font-size:9pt;font-weight:bold">{lesions.get('haemorrhages', 0)}</td></tr>
+    <tr><td style="padding:3px 6px;font-size:9pt">Hard Exudates</td><td style="padding:3px 6px;font-size:9pt;font-weight:bold">{lesions.get('hard_exudates', 0)}</td></tr>
+    <tr><td style="padding:3px 6px;font-size:9pt">Soft Exudates</td><td style="padding:3px 6px;font-size:9pt;font-weight:bold">{lesions.get('soft_exudates', 0)}</td></tr>
+  </table>
+  <div style="font-size:8.5pt;color:#555">
+    XAI Guard: {guard} · CAM Agreement: {agreement_s}
+  </div>
+</div>"""
+
+
+def render_combined_result(result_od: dict, result_os: dict) -> str:
+    """Render a combined both-eyes report as a single HTML document."""
+    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    patient_id = result_od.get("patient_id", "—")
+    captured = result_od.get("captured_at", "")[:10] or "—"
+
+    # Determine worst-case action
+    od_action = (result_od.get("routing", {}) or {}).get("action", "ROUTINE").upper()
+    os_action = (result_os.get("routing", {}) or {}).get("action", "ROUTINE").upper()
+    if "URGENT" in od_action or "URGENT" in os_action:
+        worst_action = "URGENT"
+    elif od_action == "REVIEW" or os_action == "REVIEW":
+        worst_action = "REVIEW"
+    else:
+        worst_action = "ROUTINE"
+
+    worst_label = ACTION_LABELS.get(worst_action, worst_action)
+    worst_cls = "urgent" if "URGENT" in worst_action else worst_action.lower()
+
+    od_section = _eye_section(result_od, "Right Eye")
+    os_section = _eye_section(result_os, "Left Eye")
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>NETRA-AI Combined Report — {patient_id}</title>
+  <style>{_REPORT_CSS}</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>NETRA-AI Screening Report</h1>
+    <div style="font-size:9pt;color:#555;margin-top:4px">
+      Combined Both-Eye Assessment
+    </div>
+  </div>
+  <div class="meta">
+    Patient: {patient_id}<br>
+    Date: {captured}<br>
+    Generated: {now_str}
+  </div>
+</div>
+
+<!-- Overall decision -->
+<div class="decision {worst_cls}">
+  {worst_label}
+</div>
+
+<!-- Patient info -->
+<div class="section">
+  <div class="section-title">Patient Information</div>
+  <div class="kv-row"><span class="kv-label">Patient ID:</span> {patient_id}</div>
+  <div class="kv-row"><span class="kv-label">Date of Screening:</span> {captured}</div>
+  <div class="kv-row"><span class="kv-label">PHC:</span> {result_od.get('phc_id', '—')}</div>
+  <div class="kv-row"><span class="kv-label">Operator ID:</span> {result_od.get('operator_id', '—')}</div>
+</div>
+
+<!-- Both eyes side-by-side -->
+<div class="section">
+  <div class="section-title">Eye-by-Eye Results</div>
+  <div style="display:flex;gap:20px;flex-wrap:wrap">
+    {od_section}
+    {os_section}
+  </div>
+</div>
+
+<div class="footer">
+  NETRA-AI v1.0 — AI-assisted screening only. Final diagnosis must be made by a qualified ophthalmologist.<br>
+  Model: EfficientNet-B0 + U-Net-Lite + Grad-CAM guard. Offline system — no patient data transmitted.
+</div>
+
+</body>
+</html>"""

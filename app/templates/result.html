@@ -236,7 +236,7 @@
      class="btn btn-ghost" id="btn-new-eye">
     Screen Other Eye
   </a>
-  <a href="{{ url_for('main.report_pdf', screening_id=result.screening_id) }}"
+  <a href="{{ url_for('main.report_view', screening_id=result.screening_id) }}"
      class="btn btn-primary" id="btn-download-pdf"
      target="_blank" rel="noopener">
     📄 {{ t('result.download_pdf') }}

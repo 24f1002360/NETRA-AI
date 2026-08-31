@@ -34,7 +34,7 @@
 
 <div class="card">
   <h1 class="page-title">New Screening</h1>
-  <p class="page-subtitle">Complete all steps below before capturing the image.</p>
+  <p class="page-subtitle">Enter patient details, then capture both eyes.</p>
 
   <form action="{{ url_for('main.capture_upload') }}" method="POST"
         enctype="multipart/form-data" id="capture-form" novalidate>
@@ -59,85 +59,124 @@
       </p>
     </div>
 
-    <!-- Eye selector -->
-    <div class="eye-selector">
-      <span class="eye-label">{{ t('capture.eye_select') }}</span>
-      <div class="eye-buttons" role="group" aria-label="{{ t('capture.eye_select') }}">
-        <button type="button"
-                class="eye-btn {% if request.args.get('eye', 'OD') == 'OD' %}selected{% endif %}"
-                id="eye-btn-od"
-                data-eye="OD"
-                aria-pressed="{% if request.args.get('eye', 'OD') == 'OD' %}true{% else %}false{% endif %}">
-          <span class="eye-glyph">👁</span>
-          <span>{{ t('capture.eye_od') }}</span>
-          <span class="eye-tag">Right — OD</span>
-        </button>
-        <button type="button"
-                class="eye-btn {% if request.args.get('eye') == 'OS' %}selected{% endif %}"
-                id="eye-btn-os"
-                data-eye="OS"
-                aria-pressed="{% if request.args.get('eye') == 'OS' %}true{% else %}false{% endif %}">
-          <span class="eye-glyph">👁</span>
-          <span>{{ t('capture.eye_os') }}</span>
-          <span class="eye-tag">Left — OS</span>
-        </button>
+    <!-- ===== BOTH EYES CAPTURE SECTION ===== -->
+    <div class="eyes-capture-section">
+      <h2 class="section-heading">Capture Both Eyes</h2>
+      <p class="page-subtitle" style="margin-bottom:16px">Capture or upload an image for each eye. Both are required.</p>
+
+      <div class="eye-capture-grid">
+
+        <!-- RIGHT EYE (OD) -->
+        <div class="eye-capture-card" id="card-od">
+          <div class="eye-capture-card__header">
+            <span class="eye-capture-card__glyph">👁</span>
+            <div>
+              <strong>Right Eye (OD)</strong>
+              <span class="eye-capture-card__sub">Capture first</span>
+            </div>
+          </div>
+
+          <!-- Camera viewfinder for OD -->
+          <div class="viewfinder" id="viewfinder-od">
+            <video id="video-od" autoplay playsinline muted></video>
+            <canvas id="canvas-od" style="display:none"></canvas>
+            <div class="viewfinder__overlay" id="overlay-od">
+              <div class="viewfinder__reticle"></div>
+              <span>Position pupil in centre</span>
+            </div>
+          </div>
+
+          <!-- Preview (shown after capture) -->
+          <div class="eye-preview" id="preview-od" style="display:none">
+            <img id="preview-img-od" alt="Right eye preview">
+            <button type="button" class="btn btn-ghost btn-sm retake-btn" data-eye="od">
+              ↻ Retake
+            </button>
+          </div>
+
+          <!-- Capture / Upload buttons -->
+          <div class="eye-capture-actions" id="actions-od">
+            <button type="button" class="btn btn-primary btn-capture-eye" id="btn-capture-od" data-eye="od">
+              📷 Capture
+            </button>
+            <label class="btn btn-ghost btn-sm upload-label">
+              📂 Upload
+              <input type="file" id="file-od" name="image_od" accept="image/*" style="display:none">
+            </label>
+          </div>
+
+          <!-- Status indicator -->
+          <div class="eye-status" id="status-od">
+            <span class="eye-status__dot pending"></span>
+            <span id="status-text-od">Waiting…</span>
+          </div>
+
+          <!-- Hidden input for camera-captured blob -->
+          <input type="file" id="blob-od" name="image_od_cam" style="display:none">
+        </div>
+
+        <!-- LEFT EYE (OS) -->
+        <div class="eye-capture-card" id="card-os">
+          <div class="eye-capture-card__header">
+            <span class="eye-capture-card__glyph">👁</span>
+            <div>
+              <strong>Left Eye (OS)</strong>
+              <span class="eye-capture-card__sub">Capture second</span>
+            </div>
+          </div>
+
+          <!-- Camera viewfinder for OS -->
+          <div class="viewfinder" id="viewfinder-os">
+            <video id="video-os" autoplay playsinline muted></video>
+            <canvas id="canvas-os" style="display:none"></canvas>
+            <div class="viewfinder__overlay" id="overlay-os">
+              <div class="viewfinder__reticle"></div>
+              <span>Position pupil in centre</span>
+            </div>
+          </div>
+
+          <!-- Preview -->
+          <div class="eye-preview" id="preview-os" style="display:none">
+            <img id="preview-img-os" alt="Left eye preview">
+            <button type="button" class="btn btn-ghost btn-sm retake-btn" data-eye="os">
+              ↻ Retake
+            </button>
+          </div>
+
+          <!-- Capture / Upload buttons -->
+          <div class="eye-capture-actions" id="actions-os">
+            <button type="button" class="btn btn-primary btn-capture-eye" id="btn-capture-os" data-eye="os">
+              📷 Capture
+            </button>
+            <label class="btn btn-ghost btn-sm upload-label">
+              📂 Upload
+              <input type="file" id="file-os" name="image_os" accept="image/*" style="display:none">
+            </label>
+          </div>
+
+          <!-- Status indicator -->
+          <div class="eye-status" id="status-os">
+            <span class="eye-status__dot pending"></span>
+            <span id="status-text-os">Waiting…</span>
+          </div>
+
+          <input type="file" id="blob-os" name="image_os_cam" style="display:none">
+        </div>
+
       </div>
-      <input type="hidden" id="eye-input" name="eye"
-             value="{{ request.args.get('eye', 'OD') }}">
     </div>
-
-    <!-- Capture zone -->
-    <div class="capture-zone">
-      <p class="capture-zone__hint">
-        Position the camera <strong>5 cm</strong> from the eye, centred on the pupil.
-      </p>
-
-      <button type="button"
-              class="btn btn-primary btn-capture"
-              id="btn-trigger-capture"
-              onclick="document.getElementById('image-upload').click()">
-        <span class="cam-icon">📷</span>
-        <span>{{ t('capture.button') }}</span>
-        <span class="cam-sub">Tap to open camera</span>
-      </button>
-
-      <input type="file"
-             id="image-upload"
-             name="image"
-             accept="image/*"
-             capture="environment"
-             style="display:none;"
-             aria-label="Camera capture">
-
-      <div class="image-preview-wrap" id="preview-wrap">
-        <img class="image-preview" id="upload-preview" alt="Captured fundus preview">
-      </div>
-    </div>
-
-    <!-- File upload fallback -->
-    <div class="upload-divider">or upload existing image</div>
-    <label for="image-upload-alt" class="upload-zone" id="upload-dropzone">
-      <div style="font-size:1.8rem;margin-bottom:6px">📂</div>
-      <strong>{{ t('capture.upload_alt') }}</strong>
-      <div style="font-size:.8rem;margin-top:4px;color:var(--text-subtle)">
-        JPG, PNG — max 10 MB
-      </div>
-      <input type="file"
-             id="image-upload-alt"
-             name="image_alt"
-             accept="image/*"
-             style="display:none;"
-             aria-label="{{ t('capture.upload_alt') }}">
-    </label>
 
     <!-- Form error display -->
     <div id="form-error" class="flash error mt" style="display:none" role="alert"></div>
 
     <!-- Submit -->
     <div class="mt-l">
-      <button type="submit" id="btn-submit" class="btn btn-teal btn-xl">
-        Analyse Image →
+      <button type="submit" id="btn-submit" class="btn btn-teal btn-xl btn-full" disabled>
+        Analyse Both Eyes →
       </button>
+      <p class="text-subtle mt-s" style="font-size:.8rem;text-align:center" id="submit-hint">
+        Capture both eyes to enable analysis
+      </p>
     </div>
 
   </form>
@@ -147,17 +186,36 @@
 {% block scripts %}
 <script>
 (function() {
-  // Camera status detection
-  const chipCam = document.getElementById('status-camera');
-  const camText = document.getElementById('camera-status-text');
+  /* ── State ─────────────────────────────────────────── */
+  var captured = { od: false, os: false };
+  var streams  = { od: null, os: null };
+
+  var btnSubmit  = document.getElementById('btn-submit');
+  var submitHint = document.getElementById('submit-hint');
+
+  /* ── Camera status check ───────────────────────────── */
+  var chipCam = document.getElementById('status-camera');
+  var camText = document.getElementById('camera-status-text');
+  var hasCamera = false;
+
   if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
     navigator.mediaDevices.enumerateDevices().then(function(devices) {
-      const hasCamera = devices.some(d => d.kind === 'videoinput');
+      hasCamera = devices.some(function(d) { return d.kind === 'videoinput'; });
       camText.textContent = hasCamera ? 'Camera ready' : 'No camera — use file upload';
       chipCam.classList.toggle('ok', hasCamera);
       chipCam.classList.toggle('warn', !hasCamera);
+
+      if (!hasCamera) {
+        // Hide capture buttons, keep upload only
+        document.querySelectorAll('.btn-capture-eye').forEach(function(b) {
+          b.style.display = 'none';
+        });
+        document.querySelectorAll('.viewfinder').forEach(function(v) {
+          v.style.display = 'none';
+        });
+      }
     }).catch(function() {
-      camText.textContent = 'Camera status unknown';
+      camText.textContent = 'Camera check failed';
       chipCam.classList.add('warn');
     });
   } else {
@@ -165,13 +223,176 @@
     chipCam.classList.add('warn');
   }
 
-  // Form validation
+  /* ── Update submit button state ────────────────────── */
+  function updateSubmitState() {
+    var ready = captured.od && captured.os;
+    btnSubmit.disabled = !ready;
+    if (ready) {
+      submitHint.textContent = 'Both eyes captured — ready to analyse';
+      submitHint.style.color = 'var(--green)';
+    } else if (captured.od) {
+      submitHint.textContent = 'Now capture the Left Eye (OS)';
+    } else if (captured.os) {
+      submitHint.textContent = 'Now capture the Right Eye (OD)';
+    } else {
+      submitHint.textContent = 'Capture both eyes to enable analysis';
+      submitHint.style.color = '';
+    }
+  }
+
+  /* ── Mark eye as captured ──────────────────────────── */
+  function markCaptured(eye) {
+    captured[eye] = true;
+    var dot  = document.querySelector('#status-' + eye + ' .eye-status__dot');
+    var text = document.getElementById('status-text-' + eye);
+    dot.className = 'eye-status__dot done';
+    text.textContent = 'Captured ✓';
+    document.getElementById('card-' + eye).classList.add('captured');
+    updateSubmitState();
+  }
+
+  function markPending(eye) {
+    captured[eye] = false;
+    var dot  = document.querySelector('#status-' + eye + ' .eye-status__dot');
+    var text = document.getElementById('status-text-' + eye);
+    dot.className = 'eye-status__dot pending';
+    text.textContent = 'Waiting…';
+    document.getElementById('card-' + eye).classList.remove('captured');
+    updateSubmitState();
+  }
+
+  /* ── Start camera for an eye ───────────────────────── */
+  function startCamera(eye) {
+    var video = document.getElementById('video-' + eye);
+    var vf    = document.getElementById('viewfinder-' + eye);
+
+    // Stop any existing stream
+    stopCamera(eye);
+
+    vf.style.display = 'block';
+    document.getElementById('preview-' + eye).style.display = 'none';
+    document.getElementById('actions-' + eye).style.display = 'flex';
+
+    navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 1536 }, height: { ideal: 1536 }, facingMode: 'environment' },
+      audio: false
+    }).then(function(stream) {
+      streams[eye] = stream;
+      video.srcObject = stream;
+      video.play();
+    }).catch(function(err) {
+      console.warn('Camera error:', err);
+      vf.style.display = 'none';
+      showFormError('Camera access denied or unavailable. Please use file upload.');
+    });
+  }
+
+  function stopCamera(eye) {
+    if (streams[eye]) {
+      streams[eye].getTracks().forEach(function(t) { t.stop(); });
+      streams[eye] = null;
+    }
+    var video = document.getElementById('video-' + eye);
+    video.srcObject = null;
+  }
+
+  /* ── Capture snapshot from camera ──────────────────── */
+  function captureSnapshot(eye) {
+    var video  = document.getElementById('video-' + eye);
+    var canvas = document.getElementById('canvas-' + eye);
+    var ctx    = canvas.getContext('2d');
+
+    canvas.width  = video.videoWidth  || 1536;
+    canvas.height = video.videoHeight || 1536;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    // Show preview
+    var dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+    document.getElementById('preview-img-' + eye).src = dataUrl;
+    document.getElementById('preview-' + eye).style.display = 'block';
+    document.getElementById('viewfinder-' + eye).style.display = 'none';
+    document.getElementById('actions-' + eye).style.display = 'none';
+
+    stopCamera(eye);
+
+    // Convert to file for form submission
+    canvas.toBlob(function(blob) {
+      if (!blob) return;
+      var file = new File([blob], eye + '_capture.jpg', { type: 'image/jpeg' });
+      var dt = new DataTransfer();
+      dt.items.add(file);
+      document.getElementById('blob-' + eye).files = dt.files;
+      markCaptured(eye);
+    }, 'image/jpeg', 0.92);
+  }
+
+  /* ── Capture button clicks ─────────────────────────── */
+  document.getElementById('btn-capture-od').addEventListener('click', function() {
+    if (!streams.od) {
+      startCamera('od');
+      this.textContent = '📸 Take Photo';
+    } else {
+      captureSnapshot('od');
+    }
+  });
+
+  document.getElementById('btn-capture-os').addEventListener('click', function() {
+    if (!streams.os) {
+      startCamera('os');
+      this.textContent = '📸 Take Photo';
+    } else {
+      captureSnapshot('os');
+    }
+  });
+
+  /* ── Retake buttons ────────────────────────────────── */
+  document.querySelectorAll('.retake-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var eye = this.dataset.eye;
+      markPending(eye);
+      // Reset capture button text
+      document.getElementById('btn-capture-' + eye).textContent = '📷 Capture';
+      document.getElementById('preview-' + eye).style.display = 'none';
+      document.getElementById('viewfinder-' + eye).style.display = 'none';
+      document.getElementById('actions-' + eye).style.display = 'flex';
+      // Clear blob input
+      document.getElementById('blob-' + eye).value = '';
+      document.getElementById('file-' + eye).value = '';
+    });
+  });
+
+  /* ── File upload fallback ──────────────────────────── */
+  document.getElementById('file-od').addEventListener('change', function() {
+    handleFileUpload(this, 'od');
+  });
+  document.getElementById('file-os').addEventListener('change', function() {
+    handleFileUpload(this, 'os');
+  });
+
+  function handleFileUpload(input, eye) {
+    var file = input.files && input.files[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      showFormError('Image too large (max 10 MB).');
+      input.value = '';
+      return;
+    }
+    stopCamera(eye);
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      document.getElementById('preview-img-' + eye).src = e.target.result;
+      document.getElementById('preview-' + eye).style.display = 'block';
+      document.getElementById('viewfinder-' + eye).style.display = 'none';
+      document.getElementById('actions-' + eye).style.display = 'none';
+      markCaptured(eye);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  /* ── Form validation ───────────────────────────────── */
   document.getElementById('capture-form').addEventListener('submit', function(e) {
-    const pid  = document.getElementById('patient_id').value.trim();
-    const eye  = document.getElementById('eye-input').value;
-    const imgA = document.getElementById('image-upload').files.length;
-    const imgB = document.getElementById('image-upload-alt').files.length;
-    const errEl = document.getElementById('form-error');
+    var pid   = document.getElementById('patient_id').value.trim();
+    var errEl = document.getElementById('form-error');
 
     if (!pid) {
       e.preventDefault();
@@ -180,43 +401,28 @@
       document.getElementById('patient_id').focus();
       return;
     }
-    if (!eye) {
+    if (!captured.od || !captured.os) {
       e.preventDefault();
-      errEl.textContent = '{{ t("error.no_eye") }}';
-      errEl.style.display = 'flex';
-      return;
-    }
-    if (!imgA && !imgB) {
-      e.preventDefault();
-      errEl.textContent = '{{ t("error.no_image") }}';
+      errEl.textContent = 'Please capture images for both eyes before submitting.';
       errEl.style.display = 'flex';
       return;
     }
     errEl.style.display = 'none';
 
     // Loading feedback
-    const btn = document.getElementById('btn-submit');
-    btn.textContent = 'Analysing…';
-    btn.disabled = true;
+    btnSubmit.textContent = 'Analysing both eyes…';
+    btnSubmit.disabled = true;
   });
 
-  // File upload → preview for alt input
-  document.getElementById('image-upload-alt').addEventListener('change', function() {
-    const file = this.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = function(e) {
-      const wrap = document.getElementById('preview-wrap');
-      const img  = document.getElementById('upload-preview');
-      img.src = e.target.result;
-      wrap.classList.add('visible');
-    };
-    reader.readAsDataURL(file);
-    // Also push to main input so validation passes
-    const dt = new DataTransfer();
-    dt.items.add(file);
-    document.getElementById('image-upload').files = dt.files;
-  });
+  /* ── Helpers ───────────────────────────────────────── */
+  function showFormError(msg) {
+    var el = document.getElementById('form-error');
+    if (!el) return;
+    el.textContent = msg;
+    el.style.display = 'flex';
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
 })();
 </script>
 {% endblock %}

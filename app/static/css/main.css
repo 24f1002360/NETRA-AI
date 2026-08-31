@@ -395,6 +395,7 @@ h3 { font-size: 1rem; font-weight: 600; color: var(--text-muted); margin-bottom:
 }
 
 .upload-zone {
+  display: block;
   border: 1.5px dashed var(--border);
   border-radius: var(--radius);
   padding: 24px;
@@ -405,6 +406,156 @@ h3 { font-size: 1rem; font-weight: 600; color: var(--text-muted); margin-bottom:
   transition: border-color var(--ease), background var(--ease);
 }
 .upload-zone:hover { border-color: var(--teal); background: var(--teal-dim); }
+
+/* ── DUAL-EYE CAPTURE SECTION ───────────────────────── */
+.section-heading {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.eye-capture-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 700px) {
+  .eye-capture-grid { grid-template-columns: 1fr; }
+}
+
+.eye-capture-card {
+  background: var(--surface-2);
+  border: 2px solid var(--border);
+  border-radius: 14px;
+  padding: 16px;
+  transition: border-color var(--ease), box-shadow var(--ease);
+}
+.eye-capture-card.captured {
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px var(--green-dim);
+}
+
+.eye-capture-card__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.eye-capture-card__glyph { font-size: 1.6rem; }
+.eye-capture-card__header strong { font-size: 0.95rem; display: block; }
+.eye-capture-card__sub {
+  font-size: 0.78rem;
+  color: var(--text-subtle);
+  font-weight: 500;
+}
+
+/* Camera viewfinder */
+.viewfinder {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #000;
+  margin-bottom: 12px;
+  display: none;
+}
+.viewfinder video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.viewfinder__overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.viewfinder__overlay span {
+  color: rgba(255,255,255,0.7);
+  font-size: 0.78rem;
+  font-weight: 600;
+  margin-top: 8px;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+}
+.viewfinder__reticle {
+  width: 60%;
+  aspect-ratio: 1;
+  border: 2px solid rgba(255,255,255,0.5);
+  border-radius: 50%;
+  animation: reticle-pulse 2s ease-in-out infinite;
+}
+@keyframes reticle-pulse {
+  0%, 100% { border-color: rgba(255,255,255,0.35); transform: scale(1); }
+  50% { border-color: rgba(14,165,233,0.8); transform: scale(1.03); }
+}
+
+/* Eye preview after capture */
+.eye-preview {
+  position: relative;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.eye-preview img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 10px;
+}
+.eye-preview .retake-btn {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  background: rgba(0,0,0,0.7);
+  color: #fff;
+  backdrop-filter: blur(4px);
+  min-height: 32px;
+  font-size: 0.8rem;
+  padding: 4px 12px;
+}
+
+/* Eye capture actions */
+.eye-capture-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.eye-capture-actions .btn-capture-eye {
+  flex: 1;
+  min-height: 44px;
+  font-size: 0.9rem;
+}
+.upload-label {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  font-size: 0.82rem;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+
+/* Eye status indicator */
+.eye-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-subtle);
+}
+.eye-status__dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.eye-status__dot.pending { background: var(--text-subtle); }
+.eye-status__dot.done    { background: var(--green); }
 
 .status-row {
   display: flex;
@@ -876,6 +1027,78 @@ h3 { font-size: 1rem; font-weight: 600; color: var(--text-muted); margin-bottom:
 .gap   { gap: var(--gap); }
 .divider { height: 1px; background: var(--border); margin: var(--gap) 0; }
 
+/* ── COMBINED RESULT (BOTH EYES) ─────────────────────── */
+.combined-eyes-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: var(--gap-l);
+}
+@media (max-width: 700px) {
+  .combined-eyes-grid { grid-template-columns: 1fr; }
+}
+
+.eye-result-panel {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px;
+}
+.eye-result-panel__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  font-size: 0.95rem;
+}
+.eye-glyph-sm { font-size: 1.3rem; }
+
+.eye-grade-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.eye-action-chip {
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  margin-bottom: 14px;
+  text-align: center;
+}
+.eye-action-chip.routine { background: var(--green-dim); color: var(--green); }
+.eye-action-chip.review  { background: var(--amber-dim); color: var(--amber); }
+.eye-action-chip.urgent  { background: var(--red-dim);   color: var(--red); }
+
+.lesion-grid.compact {
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.compact-panels {
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 6px !important;
+}
+.compact-panels .img-panel__frame {
+  height: 100px;
+}
+.compact-panels .img-panel__label {
+  font-size: 0.68rem;
+}
+
+.xai-guard-inline {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 6px;
+  margin-top: 8px;
+}
+.xai-guard-inline.ok   { background: var(--green-dim); color: var(--green); }
+.xai-guard-inline.warn { background: var(--amber-dim); color: var(--amber); }
+
 /* ── PRINT (PDF REPORT) ──────────────────────────────────── */
 @media print {
   body { background: #fff; color: #000; font-size: 12pt; }
@@ -887,4 +1110,5 @@ h3 { font-size: 1rem; font-weight: 600; color: var(--text-muted); margin-bottom:
   }
   .image-panels { grid-template-columns: repeat(3, 1fr); }
   .img-panel__frame { height: 140px; }
+  .combined-eyes-grid { grid-template-columns: 1fr 1fr; }
 }
