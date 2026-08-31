@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+{% block title %}Screening Result — {{ patient_id }} — {{ t('app.title') }}{% endblock %}
+
+{% block content %}
+<!-- Step indicator -->
+<div class="step-indicator" role="list" aria-label="Screening steps">
+  <div class="step done" role="listitem">
+    <div class="step__dot">✓</div><span>Capture</span>
+  </div>
+  <div class="step__line done"></div>
+  <div class="step done" role="listitem">
+    <div class="step__dot">✓</div><span>Quality</span>
+  </div>
+  <div class="step__line done"></div>
+  <div class="step active" role="listitem">
+    <div class="step__dot">3</div><span>Result</span>
+  </div>
+</div>
+
+{# ── Patient meta bar ── #}
+<div class="patient-bar" aria-label="Patient information">
+  <span>
+    <span class="patient-bar__field">Patient ID</span>
+    <strong class="patient-bar__value">{{ patient_id }}</strong>
+  </span>
+  <span>
+    <span class="patient-bar__field">Date</span>
+    <strong class="patient-bar__value">{{ od.timestamp[:10] if od.timestamp else '—' }}</strong>
+  </span>
+  <span class="patient-bar__sep"></span>
+  <a href="{{ url_for('main.history', patient_id=patient_id) }}"
+     class="btn btn-ghost" style="min-height:36px;font-size:.85rem;padding:6px 14px">
+    View History
+  </a>
+</div>
+
+{# ── Determine worst action for combined banner ── #}
+{% set od_action = od.action_type | upper %}
+{% set os_action = os.action_type | upper %}
+{% if 'URGENT' in od_action or 'URGENT' in os_action %}
+  {% set worst_tier = 'urgent' %}
+  {% set worst_icon = '🚨' %}
+{% elif od_action == 'REVIEW' or os_action == 'REVIEW' %}
+  {% set worst_tier = 'review' %}
+  {% set worst_icon = '⚠️' %}
+{% else %}
+  {% set worst_tier = 'routine' %}
+  {% set worst_icon = '✓' %}
+{% endif %}
+
+{# ── Combined decision banner ── #}
+<div class="decision-banner {{ worst_tier }}" role="alert" aria-live="assertive">
+  <div class="decision-banner__icon">{{ worst_icon }}</div>
+  <div class="decision-banner__body">
+    <div class="decision-banner__action">
+      {{ t('result.action.' ~ worst_tier) }}
+    </div>
+    <div class="decision-banner__reason" style="font-size:.85rem;opacity:.85;margin-top:4px">
+      Combined assessment for both eyes
+    </div>
+  </div>
+</div>
+
+{# ── Both eyes side by side ── #}
+<div class="combined-eyes-grid">
+
+  {# ────── MACRO for one eye panel ────── #}
+  {% macro eye_panel(eye_data, eye_label, eye_code) %}
+  <div class="eye-result-panel">
+    <div class="eye-result-panel__header">
+      <span class="eye-glyph-sm">👁</span>
+      <strong>{{ eye_label }} ({{ eye_code }})</strong>
+    </div>
+
+    {# Grade + confidence #}
+    <div class="eye-grade-row">
+      <div class="grade-box g{{ eye_data.grade }}" style="min-width:64px">
+        <span class="grade-box__number">{{ eye_data.grade }}</span>
+        <span class="grade-box__label" style="font-size:.7rem">{{ t('result.grade.' ~ eye_data.grade) }}</span>
+      </div>
+      <div class="confidence-panel" style="flex:1">
+        <div class="confidence-label" style="font-size:.78rem">{{ t('result.confidence') }}</div>
+        <div class="confidence-value" style="font-size:1.4rem">{{ (eye_data.confidence * 100) | round(0) | int }}%</div>
+        <div class="confidence-track" style="height:6px">
+          <div class="confidence-fill"
+               style="width:{{ eye_data.confidence * 100 }}%;
+                      background:{% if eye_data.confidence >= 0.7 %}var(--teal){% elif eye_data.confidence >= 0.55 %}var(--amber){% else %}var(--red){% endif %}">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# Action for this eye #}
+    {% set ea = eye_data.action_type | upper %}
+    {% if ea == 'URGENT' or ea == 'URGENT_REFERRAL' %}
+      {% set ea_cls = 'urgent' %}
+    {% elif ea == 'REVIEW' %}
+      {% set ea_cls = 'review' %}
+    {% else %}
+      {% set ea_cls = 'routine' %}
+    {% endif %}
+    <div class="eye-action-chip {{ ea_cls }}">
+      {{ t('result.action.' ~ ea_cls) }}
+    </div>
+
+    {# Lesions #}
+    <div class="lesion-grid compact">
+      {% set lesions = eye_data.lesions %}
+      <div class="lesion-item">
+        <span class="lesion-name">MA</span>
+        <span class="lesion-count">{{ (lesions.microaneurysms if lesions.microaneurysms is defined else 0) or 0 }}</span>
+      </div>
+      <div class="lesion-item">
+        <span class="lesion-name">HM</span>
+        <span class="lesion-count">{{ (lesions.haemorrhages if lesions.haemorrhages is defined else 0) or 0 }}</span>
+      </div>
+      <div class="lesion-item">
+        <span class="lesion-name">HE</span>
+        <span class="lesion-count">{{ (lesions.hard_exudates if lesions.hard_exudates is defined else 0) or 0 }}</span>
+      </div>
+      <div class="lesion-item">
+        <span class="lesion-name">SE</span>
+        <span class="lesion-count">{{ (lesions.soft_exudates if lesions.soft_exudates is defined else 0) or 0 }}</span>
+      </div>
+    </div>
+
+    {# Image evidence #}
+    {% set xai = eye_data.xai if eye_data.xai is defined else {} %}
+    <div class="image-panels compact-panels">
+      <div class="img-panel">
+        <div class="img-panel__label">Original</div>
+        <div class="img-panel__frame">
+          {% set img_block = eye_data.image if eye_data.image is defined else {} %}
+          {% set raw = img_block.raw_path or img_block.processed_path or '' %}
+          {% if raw %}
+          <img src="{{ url_for('main.serve_artifact', path=raw) }}" alt="Fundus image">
+          {% else %}
+          <div class="img-panel__placeholder">
+            <div class="img-panel__placeholder-icon">🖼</div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      <div class="img-panel">
+        <div class="img-panel__label">Overlay</div>
+        <div class="img-panel__frame">
+          {% if xai.overlay_path %}
+          <img src="{{ url_for('main.serve_artifact', path=xai.overlay_path) }}" alt="Lesion overlay">
+          {% else %}
+          <div class="img-panel__placeholder">
+            <div class="img-panel__placeholder-icon">🔬</div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      <div class="img-panel">
+        <div class="img-panel__label">Grad-CAM</div>
+        <div class="img-panel__frame">
+          {% if xai.gradcam_path %}
+          <img src="{{ url_for('main.serve_artifact', path=xai.gradcam_path) }}" alt="Grad-CAM">
+          {% else %}
+          <div class="img-panel__placeholder">
+            <div class="img-panel__placeholder-icon">🎯</div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    {# XAI guard #}
+    {% set guard = xai.guard_status if xai.guard_status is defined else '' %}
+    {% if guard == 'OK' %}
+    <div class="xai-guard-inline ok">✓ Evidence consistent</div>
+    {% elif guard %}
+    <div class="xai-guard-inline warn">⚠ {{ guard | replace('_', ' ') }}</div>
+    {% endif %}
+  </div>
+  {% endmacro %}
+
+  {{ eye_panel(od, 'Right Eye', 'OD') }}
+  {{ eye_panel(os, 'Left Eye', 'OS') }}
+
+</div>
+
+{# ── Actions ── #}
+<div class="result-actions">
+  <a href="{{ url_for('main.capture') }}"
+     class="btn btn-ghost" id="btn-new-screening">
+    New Patient Screening
+  </a>
+  <a href="{{ url_for('main.report_combined_view', session_id=session_id) }}"
+     class="btn btn-primary" id="btn-report"
+     target="_blank" rel="noopener">
+    📄 View / Print Combined Report
+  </a>
+</div>
+{% endblock %}

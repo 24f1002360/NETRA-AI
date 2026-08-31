@@ -20,99 +20,96 @@
   </div>
 </div>
 
-{# ── Determine verdict class ── #}
-{% set verdict = result.quality.verdict | upper %}
-{% if verdict == 'PASS' %}
-  {% set vclass = 'pass' %}
-  {% set vicon  = '✓' %}
-{% elif verdict == 'RETAKE' %}
+{# ── Combined verdict logic ── #}
+{% set od_verdict = result.quality.verdict | upper %}
+{% set os_verdict = result_os.quality.verdict | upper if result_os else 'PASS' %}
+
+{% if od_verdict == 'RETAKE' or os_verdict == 'RETAKE' %}
+  {% set overall_verdict = 'RETAKE' %}
   {% set vclass = 'retake' %}
   {% set vicon  = '✕' %}
 {% else %}
-  {% set vclass = 'auto' %}
-  {% set vicon  = '⚠' %}
+  {% set overall_verdict = 'PASS' %}
+  {% set vclass = 'pass' %}
+  {% set vicon  = '✓' %}
 {% endif %}
 
 {# ── Verdict hero ── #}
 <div class="verdict-hero {{ vclass }}" role="status" aria-live="assertive">
   <span class="verdict-icon">{{ vicon }}</span>
-  {% if verdict == 'PASS' %}
-    <span class="verdict-text">Good image — continue</span>
-    <p class="verdict-reason">The image meets quality requirements and is ready for analysis.</p>
-  {% elif verdict == 'RETAKE' %}
-    <span class="verdict-text">Please retake the photo</span>
-    <p class="verdict-reason">{{ t(result.quality.operator_message_key) }}</p>
-    {% if lang == 'hi' %}
-    <p class="verdict-reason-hi">{{ t(result.quality.operator_message_key) }}</p>
-    {% endif %}
-    {% if result.quality.reasons %}
-    <div class="mt-s" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-      {% for code in result.quality.reasons %}
-      <span class="status-chip warn">{{ code }}</span>
-      {% endfor %}
-    </div>
-    {% endif %}
+  {% if overall_verdict == 'PASS' %}
+    <span class="verdict-text">Good images — continue</span>
+    <p class="verdict-reason">The images meet quality requirements and are ready for analysis.</p>
   {% else %}
-    <span class="verdict-text">Image auto-corrected</span>
-    <p class="verdict-reason">{{ t('iqa.auto_corrected') }}</p>
+    <span class="verdict-text">Please retake poor quality images</span>
+    <p class="verdict-reason">One or both images did not pass the quality check.</p>
   {% endif %}
 </div>
 
-{# ── Quality scores ── #}
-{% set scores = result.quality.scores %}
-<div class="card card--flat" style="background:var(--surface-2)">
-  <h3>Image Quality Scores</h3>
-  <div class="scores-grid">
-
-    {% macro score_bar(label, value, invert=false) %}
-    {% set pct = (value * 100) | int %}
-    {% if invert %}
-      {% set good_val = 1 - value %}
-    {% else %}
-      {% set good_val = value %}
-    {% endif %}
-    {% if good_val >= 0.8 %}{% set cls = 'good' %}
-    {% elif good_val >= 0.5 %}{% set cls = 'warn' %}
-    {% else %}{% set cls = 'danger' %}{% endif %}
-    <div class="score-item">
-      <div class="score-name">{{ label }}</div>
-      <div class="score-bar-track">
-        <div class="score-bar-fill {{ cls }}" style="width:{{ pct }}%"></div>
+{# ── Both eyes side by side ── #}
+<div class="combined-eyes-grid">
+  
+  {# ────── MACRO for one eye quality ────── #}
+  {% macro eye_quality(eye_data, eye_label) %}
+    {% set verdict = eye_data.quality.verdict | upper %}
+    {% set scores = eye_data.quality.scores %}
+    
+    <div class="eye-result-panel" style="{% if verdict == 'RETAKE' %}border-color:var(--red);box-shadow:0 0 0 1px var(--red){% endif %}">
+      <div class="eye-result-panel__header">
+        <span class="eye-glyph-sm">👁</span>
+        <strong>{{ eye_label }} ({{ eye_data.eye }})</strong>
       </div>
-      <div class="score-value">{{ pct }}%</div>
+      
+      {% if verdict == 'RETAKE' %}
+        <div class="eye-action-chip urgent" style="margin-bottom:12px">✕ Retake Required</div>
+        <p style="font-size:0.85rem;color:var(--red);font-weight:600;margin-bottom:12px">
+          {{ t(eye_data.quality.operator_message_key) }}
+        </p>
+      {% else %}
+        <div class="eye-action-chip routine" style="margin-bottom:12px">✓ Quality Pass</div>
+      {% endif %}
+
+      <div class="scores-grid" style="margin-top:12px">
+        {% macro score_bar(label, value, invert=false) %}
+        {% set pct = (value * 100) | int %}
+        {% set good_val = (1 - value) if invert else value %}
+        {% if good_val >= 0.8 %}{% set cls = 'good' %}
+        {% elif good_val >= 0.5 %}{% set cls = 'warn' %}
+        {% else %}{% set cls = 'danger' %}{% endif %}
+        <div class="score-item">
+          <div class="score-name" style="font-size:0.75rem">{{ label }}</div>
+          <div class="score-bar-track" style="height:4px;margin-bottom:2px">
+            <div class="score-bar-fill {{ cls }}" style="width:{{ pct }}%"></div>
+          </div>
+          <div class="score-value" style="font-size:0.7rem">{{ pct }}%</div>
+        </div>
+        {% endmacro %}
+
+        {{ score_bar(t('quality.scores.blur'),         scores.blur) }}
+        {{ score_bar(t('quality.scores.illumination'), scores.illumination) }}
+        {{ score_bar(t('quality.scores.fov'),          scores.fov_coverage) }}
+        {{ score_bar(t('quality.scores.contrast'),     scores.contrast) }}
+      </div>
     </div>
-    {% endmacro %}
+  {% endmacro %}
 
-    {{ score_bar(t('quality.scores.blur'),         scores.blur) }}
-    {{ score_bar(t('quality.scores.illumination'), scores.illumination) }}
-    {{ score_bar(t('quality.scores.fov'),          scores.fov_coverage) }}
-    {{ score_bar(t('quality.scores.contrast'),     scores.contrast) }}
-    {% if scores.artefact is defined %}
-    {{ score_bar(t('quality.scores.artefact'),     scores.artefact, invert=true) }}
-    {% endif %}
+  {{ eye_quality(result, 'Right Eye') }}
+  {% if result_os %}
+    {{ eye_quality(result_os, 'Left Eye') }}
+  {% endif %}
 
-  </div>
 </div>
-
-{# ── Enhancement info ── #}
-{% if result.quality.enhancement_applied %}
-<div class="flash info mb">
-  <span>ℹ</span>
-  Image enhanced automatically:
-  {{ result.quality.enhancement_applied | join(', ') }}
-</div>
-{% endif %}
 
 {# ── Actions ── #}
-<div class="quality-actions">
-  {% if verdict == 'RETAKE' %}
-    <a href="{{ url_for('main.capture', patient_id=result.patient_id, eye=result.eye) }}"
+<div class="quality-actions" style="margin-top:var(--gap-l)">
+  {% if overall_verdict == 'RETAKE' %}
+    <a href="{{ url_for('main.capture', patient_id=result.patient_id) }}"
        class="btn btn-red btn-xl"
        id="btn-retake">
       {{ t('iqa.retake.button') }}
     </a>
   {% else %}
-    <a href="{{ url_for('main.result', screening_id=result.screening_id) }}"
+    <a href="{{ url_for('main.result_combined', session_id=session_id) if combined else url_for('main.result', screening_id=result.screening_id) }}"
        class="btn btn-green btn-xl"
        id="btn-continue">
       {{ t('iqa.continue') }} →
@@ -121,6 +118,7 @@
 
   <a href="{{ url_for('main.capture') }}"
      class="btn btn-ghost btn-lg btn-full"
+     style="margin-top:12px"
      id="btn-new-screening">
     Start new screening
   </a>

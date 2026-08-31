@@ -5,7 +5,7 @@ from flask import (
     request, session, jsonify, send_file, abort
 )
 from app.stubs import make_stub_result, make_stub_retake_result, make_stub_history
-from app.report import generate_pdf
+from app.report import render_result
 
 bp = Blueprint("main", __name__)
 
@@ -87,17 +87,45 @@ def capture():
 @bp.route("/capture/upload", methods=["POST"])
 def capture_upload():
     patient_id = (request.form.get("patient_id") or "").strip() or "UNKNOWN"
-    eye        = request.form.get("eye", "OD")
 
-    # Use retake stub ~30% of the time so testers see the quality screen
     import random
-    if random.random() < 0.3:
-        res = make_stub_retake_result(patient_id, eye)
-    else:
-        res = make_stub_result(patient_id, eye)
 
-    _results[res["screening_id"]] = res
-    return redirect(url_for("main.quality", screening_id=res["screening_id"]))
+    # Generate result for Right Eye (OD)
+    if random.random() < 0.2:
+        res_od = make_stub_retake_result(patient_id, "OD")
+    else:
+        res_od = make_stub_result(patient_id, "OD")
+
+    # Generate result for Left Eye (OS)
+    if random.random() < 0.2:
+        res_os = make_stub_retake_result(patient_id, "OS")
+    else:
+        res_os = make_stub_result(patient_id, "OS")
+
+    # Store both individually
+    _results[res_od["screening_id"]] = res_od
+    _results[res_os["screening_id"]] = res_os
+
+    # Create a combined screening session
+    import uuid
+    session_id = str(uuid.uuid4())
+    _results["session_" + session_id] = {
+        "session_id": session_id,
+        "patient_id": patient_id,
+        "od_screening_id": res_od["screening_id"],
+        "os_screening_id": res_os["screening_id"],
+    }
+
+    # If either eye needs retake, go to quality for the bad one first
+    od_retake = res_od["quality"]["verdict"] == "RETAKE"
+    os_retake = res_os["quality"]["verdict"] == "RETAKE"
+
+    if od_retake or os_retake:
+        # Go to combined quality screen
+        return redirect(url_for("main.quality_combined", session_id=session_id))
+
+    # Both passed → go directly to combined result
+    return redirect(url_for("main.result_combined", session_id=session_id))
 
 
 @bp.route("/quality/<screening_id>")
@@ -120,10 +148,64 @@ def result(screening_id):
     return render_template("result.html", result=_for_result_view(res))
 
 
+# ── Combined (both-eye) routes ─────────────────────────────────────────────────
+
+@bp.route("/quality/session/<session_id>")
+def quality_combined(session_id):
+    sess = _results.get("session_" + session_id)
+    if not sess:
+        return render_template("_error.html",
+                               title="Session not found",
+                               detail="This screening session has expired."), 404
+    res_od = _results.get(sess["od_screening_id"], {})
+    res_os = _results.get(sess["os_screening_id"], {})
+    return render_template("quality.html",
+                           result=res_od,
+                           result_os=res_os,
+                           session_id=session_id,
+                           combined=True)
+
+
+@bp.route("/result/session/<session_id>")
+def result_combined(session_id):
+    sess = _results.get("session_" + session_id)
+    if not sess:
+        return render_template("_error.html",
+                               title="Session not found",
+                               detail="This screening session has expired."), 404
+    res_od = _results.get(sess["od_screening_id"], {})
+    res_os = _results.get(sess["os_screening_id"], {})
+    return render_template("result_combined.html",
+                           od=_for_result_view(res_od),
+                           os=_for_result_view(res_os),
+                           patient_id=sess["patient_id"],
+                           session_id=session_id)
+
+
+@bp.route("/report/session/<session_id>/view")
+def report_combined_view(session_id):
+    sess = _results.get("session_" + session_id)
+    if not sess:
+        abort(404)
+    res_od = _results.get(sess["od_screening_id"], {})
+    res_os = _results.get(sess["os_screening_id"], {})
+    from app.report import render_combined_result
+    html_content = render_combined_result(res_od, res_os)
+    return html_content
+
+
+@bp.route("/report/<screening_id>/view")
+def report_view(screening_id):
+    res = _results.get(screening_id)
+    if not res:
+        abort(404)
+    html_content = render_result(res)
+    return html_content
+
+
 @bp.route("/history/")
 @bp.route("/history/<patient_id>")
 def history(patient_id=""):
-    # Also accept ?patient_id= GET param for the lookup form
     if not patient_id:
         patient_id = request.args.get("patient_id", "")
 
@@ -138,19 +220,6 @@ def history(patient_id=""):
         trend=_trend_from_history(history_data),
         patient_id=patient_id,
     )
-
-
-@bp.route("/report/<screening_id>/pdf")
-def report_pdf(screening_id):
-    res = _results.get(screening_id)
-    if not res:
-        abort(404)
-    pdf_path = generate_pdf(res)
-    abs_path = os.path.abspath(pdf_path)
-    if not os.path.exists(abs_path):
-        abort(404)
-    return send_file(abs_path, as_attachment=True,
-                     download_name=f"netra_report_{screening_id[:8]}.pdf")
 
 
 @bp.route("/artifacts/<path:path>")
