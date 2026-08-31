@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card quality-card">
+    <h2 class="page-title">{{ t('quality.title') }}</h2>
+    
+    <div class="verdict-section">
+        {% if result.quality.verdict == 'PASS' %}
+            <div class="badge verdict-badge badge-success">
+                <span class="icon">✅</span> PASS
+            </div>
+        {% elif result.quality.verdict == 'RETAKE' %}
+            <div class="badge verdict-badge badge-danger">
+                <span class="icon">❌</span> RETAKE
+            </div>
+            <div class="retake-reason" data-audio-key="{{ result.quality.operator_message_key }}" data-audio-lang="{{ lang }}">
+                <p>{{ t(result.quality.operator_message_key) }}</p>
+            </div>
+        {% else %}
+            <div class="badge verdict-badge badge-warning">
+                <span class="icon">🔧</span> AUTO_CORRECTED
+            </div>
+        {% endif %}
+    </div>
+
+    <div class="quality-scores">
+        <div class="score-row">
+            <span class="score-label">{{ t('quality.scores.blur') }}</span>
+            <div class="score-bar-container">
+                <div class="score-bar {{ 'good' if result.quality.scores.blur > 0.8 else 'warning' if result.quality.scores.blur > 0.5 else 'danger' }}" style="width: {{ result.quality.scores.blur * 100 }}%"></div>
+            </div>
+        </div>
+        <div class="score-row">
+            <span class="score-label">{{ t('quality.scores.illumination') }}</span>
+            <div class="score-bar-container">
+                <div class="score-bar {{ 'good' if result.quality.scores.illumination > 0.8 else 'warning' if result.quality.scores.illumination > 0.5 else 'danger' }}" style="width: {{ result.quality.scores.illumination * 100 }}%"></div>
+            </div>
+        </div>
+        <div class="score-row">
+            <span class="score-label">{{ t('quality.scores.fov') }}</span>
+            <div class="score-bar-container">
+                <div class="score-bar {{ 'good' if result.quality.scores.fov_coverage > 0.8 else 'warning' if result.quality.scores.fov_coverage > 0.5 else 'danger' }}" style="width: {{ result.quality.scores.fov_coverage * 100 }}%"></div>
+            </div>
+        </div>
+        <div class="score-row">
+            <span class="score-label">{{ t('quality.scores.contrast') }}</span>
+            <div class="score-bar-container">
+                <div class="score-bar {{ 'good' if result.quality.scores.contrast > 0.8 else 'warning' if result.quality.scores.contrast > 0.5 else 'danger' }}" style="width: {{ result.quality.scores.contrast * 100 }}%"></div>
+            </div>
+        </div>
+        <div class="score-row">
+            <span class="score-label">{{ t('quality.scores.artefact') }}</span>
+            <div class="score-bar-container">
+                <div class="score-bar {{ 'good' if result.quality.scores.artefact > 0.8 else 'warning' if result.quality.scores.artefact > 0.5 else 'danger' }}" style="width: {{ result.quality.scores.artefact * 100 }}%"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="actions">
+        {% if result.quality.verdict == 'RETAKE' %}
+            <a href="{{ url_for('main.capture', patient_id=result.patient_id, eye=result.eye) }}" class="btn btn-danger btn-large btn-full">{{ t('iqa.retake.button') }}</a>
+        {% else %}
+            <a href="{{ url_for('main.result', screening_id=result.screening_id) }}" class="btn btn-success btn-large btn-full">{{ t('iqa.continue') }}</a>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

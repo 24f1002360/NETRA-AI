@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card result-card">
+    <div class="patient-info-bar">
+        <span><strong>ID:</strong> {{ result.patient_id }}</span>
+        <span><strong>Eye:</strong> {{ result.eye }}</span>
+        <span><strong>Date:</strong> {{ result.timestamp }}</span>
+    </div>
+
+    <div class="grade-section text-center">
+        <h2 class="page-title">{{ t('result.title') }}</h2>
+        <div class="grade-display grade-{{ result.grade }}">
+            <span class="grade-number">{{ result.grade }}</span>
+            <span class="grade-label">{{ t('result.grade.' ~ result.grade) }}</span>
+        </div>
+        {% if result.grade >= 2 %}
+        <div class="badge badge-danger referable-badge">{{ t('result.referable') }}</div>
+        {% else %}
+        <div class="badge badge-success referable-badge">{{ t('result.not_referable') }}</div>
+        {% endif %}
+        
+        <div class="confidence-bar-container">
+            <span>{{ t('result.confidence') }}:</span>
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: {{ result.confidence * 100 }}%"></div>
+            </div>
+            <span>{{ (result.confidence * 100)|round(1) }}%</span>
+        </div>
+    </div>
+
+    <div class="image-panels">
+        <div class="panel">
+            <h4>{{ t('result.images.original') }}</h4>
+            <div class="img-placeholder bg-original">Original Fundus</div>
+        </div>
+        <div class="panel">
+            <h4>{{ t('result.images.overlay') }}</h4>
+            <div class="img-placeholder bg-overlay">Lesion Overlay</div>
+        </div>
+        <div class="panel">
+            <h4>{{ t('result.images.gradcam') }}</h4>
+            <div class="img-placeholder bg-gradcam">Grad-CAM</div>
+        </div>
+    </div>
+
+    <div class="details-section">
+        <div class="lesions-table">
+            <h3>{{ t('result.lesions') }}</h3>
+            <table>
+                <tr>
+                    <td>Microaneurysms</td>
+                    <td>{{ result.lesions.microaneurysms }}</td>
+                </tr>
+                <tr>
+                    <td>Haemorrhages</td>
+                    <td>{{ result.lesions.haemorrhages }}</td>
+                </tr>
+                <tr>
+                    <td>Hard Exudates</td>
+                    <td>{{ result.lesions.hard_exudates }}</td>
+                </tr>
+                <tr>
+                    <td>Soft Exudates</td>
+                    <td>{{ result.lesions.soft_exudates }}</td>
+                </tr>
+            </table>
+        </div>
+        
+        <div class="xai-guard">
+            <h3>{{ t('result.xai.guard') }}</h3>
+            {% if result.xai_agreement %}
+            <div class="alert alert-success">{{ t('result.xai.agreement_yes') }}</div>
+            {% else %}
+            <div class="alert alert-warning">{{ t('result.xai.agreement_no') }}</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="action-bar action-{{ result.action_type|lower }}">
+        <div class="action-details">
+            <span class="action-icon">
+                {% if result.action_type == 'ROUTINE' %}✅{% elif result.action_type == 'REVIEW' %}⚠️{% else %}🚨{% endif %}
+            </span>
+            <span class="action-text">{{ t('result.action.' ~ result.action_type|lower) }}</span>
+            <span class="action-reason">{{ result.action_reason }}</span>
+        </div>
+        <button class="btn btn-primary" onclick="window.print()">{{ t('result.download_pdf') }}</button>
+    </div>
+</div>
+{% endblock %}
