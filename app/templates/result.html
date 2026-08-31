@@ -12,7 +12,7 @@
         <h2 class="page-title">{{ t('result.title') }}</h2>
         <div class="grade-display grade-{{ result.grade }}">
             <span class="grade-number">{{ result.grade }}</span>
-            <span class="grade-label">{{ t('result.grade_' ~ result.grade) }}</span>
+            <span class="grade-label">{{ t('result.grade.' ~ result.grade) }}</span>
         </div>
         {% if result.grade >= 2 %}
         <div class="badge badge-danger referable-badge">{{ t('result.referable') }}</div>

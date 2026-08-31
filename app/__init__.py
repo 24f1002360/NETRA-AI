@@ -1,6 +1,8 @@
 import os
-from flask import Flask, session
-from app.i18n import load_translations, t
+
+from flask import Flask, request, session
+
+from app.i18n import available_languages, load_translations, t
 from app.routes import bp
 
 def create_app(config):
@@ -17,7 +19,14 @@ def create_app(config):
         def t_jinja(key):
             lang = session.get("lang", app.config.get("default_language", "en"))
             return t(key, lang)
-        return dict(t=t_jinja)
+        lang = session.get("lang", app.config.get("default_language", "en"))
+        endpoint = request.endpoint or ""
+        return {
+            "t": t_jinja,
+            "lang": lang,
+            "languages": available_languages(),
+            "active_page": "history" if endpoint.endswith("history") else "capture",
+        }
 
     app.register_blueprint(bp)
     return app

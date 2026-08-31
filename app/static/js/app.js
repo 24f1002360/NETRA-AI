@@ -3,7 +3,7 @@ document.getElementById('lang-switcher')?.addEventListener('change', function() 
     fetch('/api/language', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({language: this.value})
+        body: JSON.stringify({lang: this.value})
     }).then(() => location.reload());
 });
 
