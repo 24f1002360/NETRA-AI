@@ -945,32 +945,40 @@ def _safe_xai(
 
         if xai_mode == "real":
 
-            model_handle = getattr(
-                grading_model,
-                "model",
-                grading_model,
+            # explain.py's GradCAM needs the raw nn.Module, the target
+            # layer name, the device, and a preprocess(bgr) -> tensor
+            # callable that matches training -- not just the grading
+            # model object itself.
+            model_handle = {
+                "model": getattr(
+                    grading_model,
+                    "model",
+                    grading_model,
+                ),
+                "layer_name": getattr(
+                    grading_model,
+                    "gradcam_layer",
+                    "features",
+                ),
+                "device": getattr(
+                    grading_model,
+                    "device",
+                    "cpu",
+                ),
+                "preprocess": getattr(
+                    grading_model,
+                    "preprocess",
+                    None,
+                ),
+            }
+
+            raw = fn(
+                bgr,
+                model_handle,
+                grading,
+                lesion_mask,
+                fov_mask,
             )
-
-            try:
-
-                raw = fn(
-                    bgr,
-                    model_handle,
-                    grading,
-                    lesion_mask,
-                    fov_mask,
-                )
-
-            except TypeError:
-
-                # Temporary compatibility with
-                # a simplified implementation.
-                raw = fn(
-                    bgr,
-                    grading=grading,
-                    lesion_mask=lesion_mask,
-                    fov_mask=fov_mask,
-                )
 
         else:
 
