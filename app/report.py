@@ -1,18 +1,251 @@
-import time
+"""
+app/report.py — NETRA-AI clinical report generator.
+
+Owned by Abhishek (Part A).
+Contract:
+    render_result(result: dict) -> str   # HTML string
+    generate_pdf(result: dict) -> str    # path to PDF/HTML file
+
+WeasyPrint is optional — if not installed, a well-formatted HTML
+file is generated instead and the caller is notified via the return
+path having a .html extension.  This keeps offline demos safe.
+"""
+from __future__ import annotations
+
 import os
+import time
+from datetime import datetime, timezone
+
+# ── Grade/action label maps ────────────────────────────────────────────────────
+
+GRADE_LABELS = {
+    0: "No DR",
+    1: "Mild NPDR",
+    2: "Moderate NPDR",
+    3: "Severe NPDR",
+    4: "Proliferative DR",
+}
+
+ACTION_LABELS = {
+    "ROUTINE":         "No action needed — rescreen in 12 months",
+    "REVIEW":          "Refer to specialist for review",
+    "URGENT":          "URGENT: Immediate ophthalmologist referral",
+    "URGENT_REFERRAL": "URGENT: Immediate ophthalmologist referral",
+}
+
+TREND_LABELS = {
+    "WORSENING":   "Worsening ↑",
+    "IMPROVING":   "Improving ↓",
+    "STABLE":      "Stable →",
+    "FIRST_VISIT": "First visit",
+}
+
+
+# ── HTML template ──────────────────────────────────────────────────────────────
+
+_REPORT_CSS = """
+  @page { size: A4; margin: 18mm 16mm; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 11pt;
+         color: #111; background: #fff; line-height: 1.5; }
+  .header { display: flex; justify-content: space-between;
+            align-items: flex-end; border-bottom: 2px solid #1f3a5f;
+            padding-bottom: 10px; margin-bottom: 18px; }
+  .header h1 { font-size: 18pt; color: #1f3a5f; margin: 0; }
+  .header .meta { font-size: 9pt; color: #555; text-align: right; }
+  .section { margin-bottom: 16px; }
+  .section-title { font-size: 9pt; font-weight: bold; text-transform: uppercase;
+                   letter-spacing: 0.08em; color: #555;
+                   border-bottom: 1px solid #ddd; padding-bottom: 4px;
+                   margin-bottom: 8px; }
+  .kv-row { display: flex; gap: 8px; margin-bottom: 4px; font-size: 10.5pt; }
+  .kv-label { font-weight: bold; min-width: 140px; color: #333; }
+  .decision { padding: 12px 16px; border-radius: 6px; margin-bottom: 18px;
+              font-size: 12pt; font-weight: bold; }
+  .decision.routine { background: #e6f4ea; color: #2d5a27; border-left: 5px solid #2da44e; }
+  .decision.review  { background: #fef9e7; color: #7a5c00; border-left: 5px solid #e3b341; }
+  .decision.urgent  { background: #fce8e6; color: #7f2020; border-left: 5px solid #f85149; }
+  .grade-block { display: inline-block; padding: 8px 18px; border-radius: 8px;
+                 font-size: 22pt; font-weight: bold; margin-right: 14px;
+                 vertical-align: middle; }
+  .grade-0 { background: #e6f4ea; color: #2da44e; }
+  .grade-1 { background: #f0fce0; color: #57ab5a; }
+  .grade-2 { background: #fef9e7; color: #b08800; }
+  .grade-3 { background: #fce8e6; color: #c0392b; }
+  .grade-4 { background: #fce8e6; color: #8b0000; }
+  table { width: 100%; border-collapse: collapse; font-size: 10pt; }
+  th { background: #f0f4f8; color: #333; font-size: 9pt; text-transform: uppercase;
+       letter-spacing: 0.06em; padding: 7px 10px; text-align: left; }
+  td { padding: 7px 10px; border-bottom: 1px solid #eee; }
+  .footer { margin-top: 20px; padding-top: 10px; border-top: 1px solid #ccc;
+            font-size: 8pt; color: #888; text-align: center; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px;
+           font-size: 9pt; font-weight: bold; }
+  .badge-green { background: #e6f4ea; color: #2da44e; }
+  .badge-amber { background: #fef9e7; color: #b08800; }
+  .badge-red   { background: #fce8e6; color: #c0392b; }
+"""
+
 
 def render_result(result: dict) -> str:
-    start = time.perf_counter_ns()
-    html_string = f"<h1>Screening Result {result['screening_id']}</h1>"
-    elapsed_ms = (time.perf_counter_ns() - start) / 1e6
-    return html_string
+    """Render a ScreeningResult dict to a self-contained HTML string."""
+    t0 = time.perf_counter_ns()
+
+    grading   = result.get("grading", {}) or {}
+    routing   = result.get("routing", {}) or {}
+    lesions   = (result.get("lesions", {}) or {}).get("counts", {}) or {}
+    xai       = result.get("xai", {}) or {}
+    longit    = result.get("longitudinal", {}) or {}
+    quality   = result.get("quality", {}) or {}
+
+    grade       = grading.get("icdr_grade", 0) or 0
+    grade_label = GRADE_LABELS.get(grade, f"Grade {grade}")
+    confidence  = grading.get("confidence", 0.0) or 0.0
+    action_raw  = (routing.get("action") or "ROUTINE").upper()
+    action_label = ACTION_LABELS.get(action_raw, action_raw)
+    action_cls  = "urgent" if "URGENT" in action_raw else action_raw.lower()
+
+    trend_raw   = (longit.get("trend") or "FIRST_VISIT").upper()
+    trend_label = TREND_LABELS.get(trend_raw, trend_raw)
+
+    guard       = xai.get("guard_status", "—")
+    agreement   = xai.get("cam_lesion_agreement")
+    agreement_s = f"{agreement*100:.0f}%" if agreement is not None else "—"
+
+    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    captured = result.get("captured_at", "")[:10] or "—"
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>NETRA-AI Report — {result.get('screening_id', '')[:8]}</title>
+  <style>{_REPORT_CSS}</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>NETRA-AI Screening Report</h1>
+    <div style="font-size:9pt;color:#555;margin-top:4px">
+      Diabetic Retinopathy Screening System
+    </div>
+  </div>
+  <div class="meta">
+    Screening ID: {result.get('screening_id', '—')[:12]}<br>
+    Generated: {now_str}
+  </div>
+</div>
+
+<!-- Decision -->
+<div class="decision {action_cls}">
+  {action_label}
+</div>
+
+<!-- Patient info -->
+<div class="section">
+  <div class="section-title">Patient Information</div>
+  <div class="kv-row"><span class="kv-label">Patient ID:</span> {result.get('patient_id', '—')}</div>
+  <div class="kv-row"><span class="kv-label">Eye Screened:</span> {result.get('eye', '—')}</div>
+  <div class="kv-row"><span class="kv-label">Date of Capture:</span> {captured}</div>
+  <div class="kv-row"><span class="kv-label">PHC:</span> {result.get('phc_id', '—')}</div>
+  <div class="kv-row"><span class="kv-label">Operator ID:</span> {result.get('operator_id', '—')}</div>
+</div>
+
+<!-- Grading -->
+<div class="section">
+  <div class="section-title">DR Grading</div>
+  <p style="margin:8px 0">
+    <span class="grade-block grade-{grade}">{grade}</span>
+    <strong style="font-size:14pt">{grade_label}</strong>
+  </p>
+  <div class="kv-row">
+    <span class="kv-label">Confidence:</span>
+    {confidence*100:.1f}%
+    {'<span class="badge badge-amber">Low — review recommended</span>' if confidence < 0.55 else ''}
+  </div>
+  <div class="kv-row">
+    <span class="kv-label">Referable DR:</span>
+    {'<span class="badge badge-red">Yes</span>' if grading.get('referable_dr') else '<span class="badge badge-green">No</span>'}
+  </div>
+  <div class="kv-row"><span class="kv-label">Model:</span>
+    {grading.get('model_id', '—')} ({grading.get('model_version', '—')})
+  </div>
+</div>
+
+<!-- Lesions -->
+<div class="section">
+  <div class="section-title">Lesions Detected</div>
+  <table>
+    <thead>
+      <tr><th>Lesion Type</th><th>Count</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Microaneurysms</td><td>{lesions.get('microaneurysms', 0)}</td></tr>
+      <tr><td>Haemorrhages</td><td>{lesions.get('haemorrhages', 0)}</td></tr>
+      <tr><td>Hard Exudates</td><td>{lesions.get('hard_exudates', 0)}</td></tr>
+      <tr><td>Soft Exudates</td><td>{lesions.get('soft_exudates', 0)}</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- XAI + Longitudinal -->
+<div class="section">
+  <div class="section-title">Evidence & Longitudinal Trend</div>
+  <div class="kv-row"><span class="kv-label">XAI Guard Status:</span> {guard}</div>
+  <div class="kv-row"><span class="kv-label">CAM-Lesion Agreement:</span> {agreement_s}</div>
+  <div class="kv-row"><span class="kv-label">Trend vs Prior:</span> {trend_label}</div>
+  <div class="kv-row"><span class="kv-label">Prior Grade:</span>
+    {longit.get('prior_grade', '—') if longit.get('prior_grade') is not None else 'No prior screening'}
+  </div>
+</div>
+
+<!-- Image quality -->
+<div class="section">
+  <div class="section-title">Image Quality</div>
+  <div class="kv-row"><span class="kv-label">Verdict:</span> {quality.get('verdict', '—')}</div>
+  <div class="kv-row"><span class="kv-label">Enhancement:</span>
+    {', '.join(quality.get('enhancement_applied', [])) or 'None'}
+  </div>
+</div>
+
+<div class="footer">
+  NETRA-AI v1.0 — AI-assisted screening only. Final diagnosis must be made by a qualified ophthalmologist.<br>
+  Model: EfficientNet-B0 + U-Net-Lite + Grad-CAM guard. Offline system — no patient data transmitted.
+</div>
+
+</body>
+</html>"""
+
+    result.setdefault("timings_ms", {})["report"] = (time.perf_counter_ns() - t0) / 1e6
+    return html
+
 
 def generate_pdf(result: dict) -> str:
-    start = time.perf_counter_ns()
-    report_dir = os.path.join('data', 'reports')
+    """
+    Generate a clinical PDF report. Returns the path to the generated file.
+
+    Falls back to HTML if WeasyPrint is unavailable (keeps offline demos safe).
+    """
+    report_dir = os.path.join("data", "reports")
     os.makedirs(report_dir, exist_ok=True)
-    path = os.path.join(report_dir, f"{result['screening_id']}_report.html")
-    with open(path, 'w') as f:
-        f.write(f"<html><body><h1>Report {result['screening_id']}</h1></body></html>")
-    elapsed_ms = (time.perf_counter_ns() - start) / 1e6
-    return path
+
+    sid = result.get("screening_id", "unknown")[:12]
+    html_content = render_result(result)
+
+    try:
+        from weasyprint import HTML  # type: ignore
+        pdf_path = os.path.join(report_dir, f"{sid}_report.pdf")
+        HTML(string=html_content).write_pdf(pdf_path)
+        return pdf_path
+    except ImportError:
+        # WeasyPrint not installed — write HTML instead
+        html_path = os.path.join(report_dir, f"{sid}_report.html")
+        with open(html_path, "w", encoding="utf-8") as fh:
+            fh.write(html_content)
+        return html_path
+    except Exception:
+        # Any WeasyPrint runtime error → fall back to HTML
+        html_path = os.path.join(report_dir, f"{sid}_report.html")
+        with open(html_path, "w", encoding="utf-8") as fh:
+            fh.write(html_content)
+        return html_path

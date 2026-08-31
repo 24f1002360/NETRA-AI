@@ -1,43 +1,65 @@
 <!DOCTYPE html>
 <html lang="{{ lang }}">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ t('app.title') }}</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="NETRA-AI — Offline diabetic retinopathy screening for ASHA workers">
+  <title>{% block title %}{{ t('app.title') }}{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
 </head>
-<body>
-    <header>
-        <div class="header-left">
-            <h1 class="app-logo">👁 {{ t('app.title') }}</h1>
-        </div>
-        <nav>
-            <a href="{{ url_for('main.capture') }}" class="nav-link {{ 'active' if active_page == 'capture' }}">{{ t('nav.capture') }}</a>
-            <a href="{{ url_for('main.history', patient_id='') }}" class="nav-link {{ 'active' if active_page == 'history' }}">{{ t('nav.history') }}</a>
-        </nav>
-        <div class="header-right">
-            <select id="lang-switcher" class="lang-select">
-                {% for l in languages %}
-                <option value="{{ l }}" {{ 'selected' if l == lang }}>{{ l|upper }}</option>
-                {% endfor %}
-            </select>
-        </div>
-    </header>
-    
-    <main>
-        {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-        {% for category, message in messages %}
-        <div class="alert alert-{{ category }}">{{ message }}</div>
+<body class="app-shell">
+
+  <header class="site-header">
+    <div class="site-header__brand">
+      <div class="brand-icon">👁</div>
+      <span>NETRA-AI</span>
+    </div>
+
+    <nav class="site-header__nav" aria-label="Main navigation">
+      <a href="{{ url_for('main.capture') }}"
+         class="nav-link {% if active_page == 'capture' %}active{% endif %}"
+         id="nav-capture">
+        <span>＋</span> {{ t('nav.capture') }}
+      </a>
+      <a href="{{ url_for('main.history', patient_id='') }}"
+         class="nav-link {% if active_page == 'history' %}active{% endif %}"
+         id="nav-history">
+        <span>📋</span> {{ t('nav.history') }}
+      </a>
+    </nav>
+
+    <div class="site-header__right">
+      <select id="lang-switcher" class="lang-select" aria-label="Select language">
+        {% for l in languages %}
+        <option value="{{ l }}" {% if l == lang %}selected{% endif %}>{{ l | upper }}</option>
         {% endfor %}
-        {% endif %}
-        {% endwith %}
-        
-        {% block content %}{% endblock %}
-    </main>
-    
-    <audio id="voice-prompt" preload="auto"></audio>
-    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
-    {% block scripts %}{% endblock %}
+      </select>
+    </div>
+  </header>
+
+  <main class="page-content" id="main-content">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="flash-list" role="alert">
+      {% for category, message in messages %}
+      <div class="flash {{ category }}">
+        <span>
+          {% if category == 'error' %}⚠{% elif category == 'success' %}✓{% else %}ℹ{% endif %}
+        </span>
+        {{ message }}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </main>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+  {% block scripts %}{% endblock %}
 </body>
 </html>

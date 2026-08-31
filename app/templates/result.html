@@ -1,91 +1,245 @@
 {% extends "base.html" %}
+{% block title %}Screening Result — {{ t('app.title') }}{% endblock %}
 
 {% block content %}
-<div class="card result-card">
-    <div class="patient-info-bar">
-        <span><strong>ID:</strong> {{ result.patient_id }}</span>
-        <span><strong>Eye:</strong> {{ result.eye }}</span>
-        <span><strong>Date:</strong> {{ result.timestamp }}</span>
-    </div>
+<!-- Step indicator -->
+<div class="step-indicator" role="list" aria-label="Screening steps">
+  <div class="step done" role="listitem">
+    <div class="step__dot">✓</div><span>Capture</span>
+  </div>
+  <div class="step__line done"></div>
+  <div class="step done" role="listitem">
+    <div class="step__dot">✓</div><span>Quality</span>
+  </div>
+  <div class="step__line done"></div>
+  <div class="step active" role="listitem">
+    <div class="step__dot">3</div><span>Result</span>
+  </div>
+</div>
 
-    <div class="grade-section text-center">
-        <h2 class="page-title">{{ t('result.title') }}</h2>
-        <div class="grade-display grade-{{ result.grade }}">
-            <span class="grade-number">{{ result.grade }}</span>
-            <span class="grade-label">{{ t('result.grade.' ~ result.grade) }}</span>
-        </div>
-        {% if result.grade >= 2 %}
-        <div class="badge badge-danger referable-badge">{{ t('result.referable') }}</div>
+{# ── Patient meta bar ── #}
+<div class="patient-bar" aria-label="Patient information">
+  <span>
+    <span class="patient-bar__field">Patient ID</span>
+    <strong class="patient-bar__value">{{ result.patient_id }}</strong>
+  </span>
+  <span>
+    <span class="patient-bar__field">Eye</span>
+    <strong class="patient-bar__value">{{ result.eye }}</strong>
+  </span>
+  <span>
+    <span class="patient-bar__field">Date</span>
+    <strong class="patient-bar__value">{{ result.timestamp[:10] if result.timestamp else '—' }}</strong>
+  </span>
+  <span class="patient-bar__sep"></span>
+  <a href="{{ url_for('main.history', patient_id=result.patient_id) }}"
+     class="btn btn-ghost" style="min-height:36px;font-size:.85rem;padding:6px 14px">
+    View History
+  </a>
+</div>
+
+{# ── Determine action tier ── #}
+{% set action = result.action_type | upper %}
+{% if action == 'URGENT' or action == 'URGENT_REFERRAL' %}
+  {% set tier = 'urgent' %}
+  {% set tier_icon = '🚨' %}
+{% elif action == 'REVIEW' %}
+  {% set tier = 'review' %}
+  {% set tier_icon = '⚠️' %}
+{% else %}
+  {% set tier = 'routine' %}
+  {% set tier_icon = '✓' %}
+{% endif %}
+
+{# ── Decision banner (primary call to action) ── #}
+<div class="decision-banner {{ tier }}" role="alert" aria-live="assertive">
+  <div class="decision-banner__icon">{{ tier_icon }}</div>
+  <div class="decision-banner__body">
+    <div class="decision-banner__action">
+      {{ t('result.action.' ~ tier) }}
+    </div>
+    {% if result.action_reason %}
+    <div class="decision-banner__reason">
+      Reason: {{ result.action_reason | replace('_', ' ') | title }}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{# ── Grade + confidence ── #}
+<div class="grade-confidence-row">
+  <div class="grade-box g{{ result.grade }}"
+       aria-label="{{ t('result.grade') }}: {{ result.grade }} — {{ t('result.grade.' ~ result.grade) }}">
+    <span class="grade-box__number">{{ result.grade }}</span>
+    <span class="grade-box__label">{{ t('result.grade.' ~ result.grade) }}</span>
+    <span class="grade-box__sub">ICDR Grade</span>
+  </div>
+
+  <div class="confidence-panel">
+    <div class="confidence-label">{{ t('result.confidence') }}</div>
+    <div class="confidence-value">{{ (result.confidence * 100) | round(0) | int }}%</div>
+  {% set grading_block = result.grading if result.grading is defined else {} %}
+    <div class="confidence-track" role="progressbar"
+         aria-valuenow="{{ (result.confidence * 100) | round(0) | int }}"
+         aria-valuemin="0" aria-valuemax="100">
+      <div class="confidence-fill"
+           style="width:{{ result.confidence * 100 }}%;
+                  background:{% if result.confidence >= 0.7 %}var(--teal){% elif result.confidence >= 0.55 %}var(--amber){% else %}var(--red){% endif %}">
+      </div>
+    </div>
+    {% set grading_block = result.grading if result.grading is defined else {} %}
+    {% if grading_block.uncertain %}
+    <div class="confidence-uncertain">⚠ Model confidence low — specialist review recommended</div>
+    {% endif %}
+    {% if grading_block.referable_dr %}
+    <div class="mt-s">
+      <span class="status-chip warn">Referable DR</span>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{# ── Image evidence ── #}
+{% set xai = result.xai if result.xai is defined else {} %}
+{% set guard = xai.guard_status if xai.guard_status is defined else '' %}
+<div class="card card--flat mb-s" style="background:var(--surface-2)">
+  <div class="evidence-header">
+    <h3 style="margin:0">Image Evidence</h3>
+    {% if guard %}
+    <span class="evidence-guard {% if guard == 'OK' %}ok{% else %}warn{% endif %}">
+      {% if guard == 'OK' %}✓ Evidence consistent{% else %}⚠ {{ guard | replace('_', ' ') }}{% endif %}
+    </span>
+    {% endif %}
+  </div>
+
+  <div class="image-panels">
+    {# Original #}
+    <div class="img-panel">
+      <div class="img-panel__label">{{ t('result.images.original') }}</div>
+      <div class="img-panel__frame">
+        {% set img_block = result.image if result.image is defined else {} %}
+        {% set raw = img_block.raw_path or img_block.processed_path or '' %}
+        {% if raw %}
+        <img src="{{ url_for('main.serve_artifact', path=raw) }}"
+             alt="Original fundus image"
+             onerror="this.parentNode.innerHTML='<div class=img-panel__placeholder><div class=img-panel__placeholder-icon>🖼</div><span>Image unavailable</span></div>'">
         {% else %}
-        <div class="badge badge-success referable-badge">{{ t('result.not_referable') }}</div>
+        <div class="img-panel__placeholder">
+          <div class="img-panel__placeholder-icon">🖼</div>
+          <span>Waiting for image</span>
+        </div>
         {% endif %}
-        
-        <div class="confidence-bar-container">
-            <span>{{ t('result.confidence') }}:</span>
-            <div class="progress-bar">
-                <div class="progress-fill" style="width: {{ result.confidence * 100 }}%"></div>
-            </div>
-            <span>{{ (result.confidence * 100)|round(1) }}%</span>
-        </div>
+      </div>
     </div>
 
-    <div class="image-panels">
-        <div class="panel">
-            <h4>{{ t('result.images.original') }}</h4>
-            <div class="img-placeholder bg-original">Original Fundus</div>
+    {# Lesion overlay #}
+    <div class="img-panel">
+      <div class="img-panel__label">{{ t('result.images.overlay') }}</div>
+      <div class="img-panel__frame">
+        {% if xai.overlay_path %}
+        <img src="{{ url_for('main.serve_artifact', path=xai.overlay_path) }}"
+             alt="Lesion overlay"
+             onerror="this.parentNode.innerHTML='<div class=img-panel__placeholder><div class=img-panel__placeholder-icon>🔬</div><span>Overlay unavailable</span></div>'">
+        {% else %}
+        <div class="img-panel__placeholder">
+          <div class="img-panel__placeholder-icon">🔬</div>
+          <span>Awaiting segmentation</span>
         </div>
-        <div class="panel">
-            <h4>{{ t('result.images.overlay') }}</h4>
-            <div class="img-placeholder bg-overlay">Lesion Overlay</div>
-        </div>
-        <div class="panel">
-            <h4>{{ t('result.images.gradcam') }}</h4>
-            <div class="img-placeholder bg-gradcam">Grad-CAM</div>
-        </div>
+        {% endif %}
+      </div>
     </div>
 
-    <div class="details-section">
-        <div class="lesions-table">
-            <h3>{{ t('result.lesions') }}</h3>
-            <table>
-                <tr>
-                    <td>Microaneurysms</td>
-                    <td>{{ result.lesions.microaneurysms }}</td>
-                </tr>
-                <tr>
-                    <td>Haemorrhages</td>
-                    <td>{{ result.lesions.haemorrhages }}</td>
-                </tr>
-                <tr>
-                    <td>Hard Exudates</td>
-                    <td>{{ result.lesions.hard_exudates }}</td>
-                </tr>
-                <tr>
-                    <td>Soft Exudates</td>
-                    <td>{{ result.lesions.soft_exudates }}</td>
-                </tr>
-            </table>
+    {# Grad-CAM #}
+    <div class="img-panel">
+      <div class="img-panel__label">{{ t('result.images.gradcam') }}</div>
+      <div class="img-panel__frame">
+        {% if xai.gradcam_path %}
+        <img src="{{ url_for('main.serve_artifact', path=xai.gradcam_path) }}"
+             alt="Grad-CAM explanation"
+             onerror="this.parentNode.innerHTML='<div class=img-panel__placeholder><div class=img-panel__placeholder-icon>🎯</div><span>CAM unavailable</span></div>'">
+        {% else %}
+        <div class="img-panel__placeholder">
+          <div class="img-panel__placeholder-icon">🎯</div>
+          <span>Awaiting XAI</span>
         </div>
-        
-        <div class="xai-guard">
-            <h3>{{ t('result.xai.guard') }}</h3>
-            {% if result.xai_agreement %}
-            <div class="alert alert-success">{{ t('result.xai.agreement_yes') }}</div>
-            {% else %}
-            <div class="alert alert-warning">{{ t('result.xai.agreement_no') }}</div>
-            {% endif %}
-        </div>
+        {% endif %}
+      </div>
     </div>
+  </div>
 
-    <div class="action-bar action-{{ result.action_type|lower }}">
-        <div class="action-details">
-            <span class="action-icon">
-                {% if result.action_type == 'ROUTINE' %}✅{% elif result.action_type == 'REVIEW' %}⚠️{% else %}🚨{% endif %}
-            </span>
-            <span class="action-text">{{ t('result.action.' ~ result.action_type|lower) }}</span>
-            <span class="action-reason">{{ result.action_reason }}</span>
-        </div>
-        <button class="btn btn-primary" onclick="window.print()">{{ t('result.download_pdf') }}</button>
+  {# XAI guard detail #}
+  {% if guard and guard != 'OK' %}
+  <div class="xai-guard-panel warn">
+    <div class="xai-guard-panel__icon">⚠️</div>
+    <div class="xai-guard-panel__body">
+      <div class="xai-guard-panel__title">{{ t('result.xai.guard.low_agreement') }}</div>
+      <div class="xai-guard-panel__desc">
+        The model's attention map does not fully agree with detected lesion locations.
+        This screening has been automatically escalated for specialist review.
+      </div>
     </div>
+  </div>
+  {% elif guard == 'OK' %}
+  <div class="xai-guard-panel ok mt-s">
+    <div class="xai-guard-panel__icon">✓</div>
+    <div class="xai-guard-panel__body">
+      <div class="xai-guard-panel__title">{{ t('result.xai.guard.ok') }}</div>
+      <div class="xai-guard-panel__desc">
+        Model attention aligns with lesion locations (agreement:
+        {{ ((xai.cam_lesion_agreement or 0) * 100) | round(0) | int }}%).
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+{# ── Lesions ── #}
+{% set lesions = result.lesions %}
+<div class="card card--flat mb" style="background:var(--surface-2)">
+  <h3>{{ t('result.lesions') }}</h3>
+  <div class="lesion-grid">
+    {% macro lesion_item(key, label) %}
+    {% set cnt = (lesions[key] if key in lesions else 0) or 0 %}
+    <div class="lesion-item">
+      <span class="lesion-name">{{ label }}</span>
+      <span class="lesion-count {% if cnt > 10 %}elevated{% endif %}">{{ cnt }}</span>
+    </div>
+    {% endmacro %}
+
+    {{ lesion_item('microaneurysms', t('result.lesions.microaneurysms')) }}
+    {{ lesion_item('haemorrhages',   t('result.lesions.haemorrhages')) }}
+    {{ lesion_item('hard_exudates',  t('result.lesions.hard_exudates')) }}
+    {{ lesion_item('soft_exudates',  t('result.lesions.soft_exudates')) }}
+  </div>
+</div>
+
+{# ── Other conditions ── #}
+{% set other = result.other_conditions if result.other_conditions is defined else {} %}
+{% set gs = other.glaucoma_suspect if other.glaucoma_suspect is defined else {} %}
+{% set hr = other.hypertensive_retinopathy if other.hypertensive_retinopathy is defined else {} %}
+{% if gs.flag or hr.flag %}
+<div class="flash warning mb">
+  <span>⚠</span>
+  Additional findings:
+  {% if gs.flag %}
+  Glaucoma suspect (CDR {{ gs.cup_disc_ratio }}).
+  {% endif %}
+  {% if hr.flag %}
+  Hypertensive retinopathy signs detected.
+  {% endif %}
+</div>
+{% endif %}
+
+{# ── Actions ── #}
+<div class="result-actions">
+  <a href="{{ url_for('main.capture', patient_id=result.patient_id) }}"
+     class="btn btn-ghost" id="btn-new-eye">
+    Screen Other Eye
+  </a>
+  <a href="{{ url_for('main.report_pdf', screening_id=result.screening_id) }}"
+     class="btn btn-primary" id="btn-download-pdf"
+     target="_blank" rel="noopener">
+    📄 {{ t('result.download_pdf') }}
+  </a>
 </div>
 {% endblock %}
