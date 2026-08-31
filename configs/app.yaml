@@ -1,0 +1,23 @@
+# NETRA AI application configuration
+
+runtime: onnx
+
+modules:
+  iqa: stub
+  grading: stub
+  segmentation: stub
+  xai: stub
+
+alerts:
+  enabled: false
+
+database:
+  path: data/netra.db
+
+sync:
+  enabled: true
+  interval_seconds: 30
+  max_attempts: 5
+
+logging:
+  level: INFO
