@@ -1,12 +1,12 @@
 # NETRA AI application configuration
 
-runtime: onnx
+runtime: pytorch
 
 modules:
-  iqa: stub
-  grading: stub
-  segmentation: stub
-  xai: stub
+  iqa: real
+  grading: real
+  segmentation: real
+  xai: real
 
 alerts:
   enabled: false
