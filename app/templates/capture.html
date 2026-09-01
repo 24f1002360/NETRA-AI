@@ -72,7 +72,6 @@
             <span class="eye-capture-card__glyph">👁</span>
             <div>
               <strong>{{ bt('capture.eye_od') }}</strong>
-              <span class="eye-capture-card__sub">{{ bt('capture.eye_od.help') }}</span>
             </div>
           </div>
 
@@ -108,7 +107,7 @@
           <!-- Status indicator -->
           <div class="eye-status" id="status-od">
             <span class="eye-status__dot pending"></span>
-            <span id="status-text-od">{{ bt('capture.waiting') }}</span>
+            <span id="status-text-od"></span>
           </div>
 
           <!-- Hidden input for camera-captured blob -->
@@ -121,7 +120,6 @@
             <span class="eye-capture-card__glyph">👁</span>
             <div>
               <strong>{{ bt('capture.eye_os') }}</strong>
-              <span class="eye-capture-card__sub">{{ bt('capture.eye_os.help') }}</span>
             </div>
           </div>
 
@@ -157,7 +155,7 @@
           <!-- Status indicator -->
           <div class="eye-status" id="status-os">
             <span class="eye-status__dot pending"></span>
-            <span id="status-text-os">{{ bt('capture.waiting') }}</span>
+            <span id="status-text-os"></span>
           </div>
 
           <input type="file" id="blob-os" name="image_os_cam" style="display:none">
@@ -256,7 +254,7 @@
     var dot  = document.querySelector('#status-' + eye + ' .eye-status__dot');
     var text = document.getElementById('status-text-' + eye);
     dot.className = 'eye-status__dot pending';
-    text.textContent = 'Waiting…';
+    text.textContent = '';
     document.getElementById('card-' + eye).classList.remove('captured');
     updateSubmitState();
   }
