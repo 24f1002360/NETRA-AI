@@ -101,7 +101,7 @@
             </button>
             <label class="btn btn-ghost btn-sm upload-label">
               📂 Upload
-              <input type="file" id="file-od" name="image_od" accept="image/*" style="display:none">
+              <input type="file" id="file-od" name="image_od" accept="image/jpeg,image/png" style="display:none">
             </label>
           </div>
 
@@ -150,7 +150,7 @@
             </button>
             <label class="btn btn-ghost btn-sm upload-label">
               📂 Upload
-              <input type="file" id="file-os" name="image_os" accept="image/*" style="display:none">
+              <input type="file" id="file-os" name="image_os" accept="image/jpeg,image/png" style="display:none">
             </label>
           </div>
 
@@ -175,7 +175,7 @@
         Analyse Both Eyes →
       </button>
       <p class="text-subtle mt-s" style="font-size:.8rem;text-align:center" id="submit-hint">
-        Capture both eyes to enable analysis
+        JPG or PNG only, up to 10 MB each. Capture both eyes to enable analysis.
       </p>
     </div>
 
@@ -372,6 +372,11 @@
   function handleFileUpload(input, eye) {
     var file = input.files && input.files[0];
     if (!file) return;
+    if (['image/jpeg', 'image/png'].indexOf(file.type) === -1) {
+      showFormError('Use a JPG or PNG retinal image.');
+      input.value = '';
+      return;
+    }
     if (file.size > 10 * 1024 * 1024) {
       showFormError('Image too large (max 10 MB).');
       input.value = '';

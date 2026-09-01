@@ -130,10 +130,10 @@
       <div class="img-panel">
         <div class="img-panel__label">Original</div>
         <div class="img-panel__frame">
-          {% set img_block = eye_data.image if eye_data.image is defined else {} %}
-          {% set raw = img_block.raw_path or img_block.processed_path or '' %}
+          {% set media = eye_data.media if eye_data.media is defined else {} %}
+          {% set raw = media.raw or media.processed or '' %}
           {% if raw %}
-          <img src="{{ url_for('main.serve_artifact', path=raw) }}" alt="Fundus image">
+          <img src="{{ url_for('main.serve_capture_media', path=raw) }}" alt="Fundus image">
           {% else %}
           <div class="img-panel__placeholder">
             <div class="img-panel__placeholder-icon">🖼</div>
@@ -144,8 +144,8 @@
       <div class="img-panel">
         <div class="img-panel__label">Overlay</div>
         <div class="img-panel__frame">
-          {% if xai.overlay_path %}
-          <img src="{{ url_for('main.serve_artifact', path=xai.overlay_path) }}" alt="Lesion overlay">
+          {% if media.overlay %}
+          <img src="{{ url_for('main.serve_capture_media', path=media.overlay) }}" alt="Evidence overlay">
           {% else %}
           <div class="img-panel__placeholder">
             <div class="img-panel__placeholder-icon">🔬</div>
@@ -156,8 +156,8 @@
       <div class="img-panel">
         <div class="img-panel__label">Grad-CAM</div>
         <div class="img-panel__frame">
-          {% if xai.gradcam_path %}
-          <img src="{{ url_for('main.serve_artifact', path=xai.gradcam_path) }}" alt="Grad-CAM">
+          {% if media.gradcam %}
+          <img src="{{ url_for('main.serve_capture_media', path=media.gradcam) }}" alt="Grad-CAM">
           {% else %}
           <div class="img-panel__placeholder">
             <div class="img-panel__placeholder-icon">🎯</div>

@@ -117,10 +117,9 @@
     <div class="img-panel">
       <div class="img-panel__label">{{ t('result.images.original') }}</div>
       <div class="img-panel__frame">
-        {% set img_block = result.image if result.image is defined else {} %}
-        {% set raw = img_block.raw_path or img_block.processed_path or '' %}
+        {% set raw = result.media.raw or result.media.processed or '' %}
         {% if raw %}
-        <img src="{{ url_for('main.serve_artifact', path=raw) }}"
+        <img src="{{ url_for('main.serve_capture_media', path=raw) }}"
              alt="Original fundus image"
              onerror="this.parentNode.innerHTML='<div class=img-panel__placeholder><div class=img-panel__placeholder-icon>🖼</div><span>Image unavailable</span></div>'">
         {% else %}
@@ -136,8 +135,8 @@
     <div class="img-panel">
       <div class="img-panel__label">{{ t('result.images.overlay') }}</div>
       <div class="img-panel__frame">
-        {% if xai.overlay_path %}
-        <img src="{{ url_for('main.serve_artifact', path=xai.overlay_path) }}"
+        {% if result.media.overlay %}
+        <img src="{{ url_for('main.serve_capture_media', path=result.media.overlay) }}"
              alt="Lesion overlay"
              onerror="this.parentNode.innerHTML='<div class=img-panel__placeholder><div class=img-panel__placeholder-icon>🔬</div><span>Overlay unavailable</span></div>'">
         {% else %}
@@ -153,8 +152,8 @@
     <div class="img-panel">
       <div class="img-panel__label">{{ t('result.images.gradcam') }}</div>
       <div class="img-panel__frame">
-        {% if xai.gradcam_path %}
-        <img src="{{ url_for('main.serve_artifact', path=xai.gradcam_path) }}"
+        {% if result.media.gradcam %}
+        <img src="{{ url_for('main.serve_capture_media', path=result.media.gradcam) }}"
              alt="Grad-CAM explanation"
              onerror="this.parentNode.innerHTML='<div class=img-panel__placeholder><div class=img-panel__placeholder-icon>🎯</div><span>CAM unavailable</span></div>'">
         {% else %}

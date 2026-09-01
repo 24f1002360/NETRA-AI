@@ -1,15 +1,19 @@
-import os
+import uuid
+from pathlib import Path
 
 from flask import (
     Blueprint, redirect, url_for, render_template,
     request, session, jsonify, send_file, abort
 )
-from app.stubs import make_stub_result, make_stub_retake_result, make_stub_history
 from app.report import render_result
+from core.inference import run_screening
+from db.dao import get_history, get_screening as get_persisted_screening
 
 bp = Blueprint("main", __name__)
+screening_bp = Blueprint("screening", __name__)
 
-# In-memory result store (replaced by Divyanshu's DB on integration)
+# Short-lived cache for an active two-eye session. Individual records are
+# persisted by ``run_screening`` and can be restored from SQLite on demand.
 _results: dict = {}
 
 
@@ -28,6 +32,9 @@ def _for_result_view(screening: dict) -> dict:
     if action == "URGENT_REFERRAL":
         action = "URGENT"
 
+    image = screening.get("image", {}) or {}
+    xai = screening.get("xai", {}) or {}
+
     return {
         **screening,
         "timestamp":    screening.get("captured_at", ""),
@@ -38,6 +45,13 @@ def _for_result_view(screening: dict) -> dict:
         "xai_agreement": (screening.get("xai", {}) or {}).get("guard_status") == "OK",
         "action_type":  action,
         "action_reason": routing.get("reason", ""),
+        "media": {
+            "raw": _media_path(image.get("raw_path")),
+            "processed": _media_path(image.get("processed_path")),
+            "lesion": _media_path((screening.get("lesions", {}) or {}).get("mask_path")),
+            "overlay": _media_path(xai.get("overlay_path")),
+            "gradcam": _media_path(xai.get("gradcam_path")),
+        },
     }
 
 
@@ -56,12 +70,29 @@ def _for_history_view(screenings: list) -> list:
     return rows
 
 
+def _get_result(screening_id: str) -> dict | None:
+    """Read a current result from cache first, then its durable offline record."""
+    return _results.get(screening_id) or get_persisted_screening(screening_id)
+
+
+def _media_path(value):
+    """Return a path safely relative to locally served screening media."""
+    if not value:
+        return None
+    root = (Path.cwd() / "data" / "captures").resolve()
+    try:
+        return str(Path(value).resolve().relative_to(root)).replace("\\", "/")
+    except (OSError, ValueError):
+        return None
+
+
 def _trend_from_history(screenings: list) -> str:
     """Compute a trend string from a list of ScreeningResult dicts."""
     if not screenings:
         return "First Visit"
     # Check longitudinal block of the latest screening
-    latest = screenings[-1] if screenings else {}
+    # DAO history is newest-first, so the first record is the current result.
+    latest = screenings[0]
     trend = (latest.get("longitudinal") or {}).get("trend", "FIRST_VISIT")
     mapping = {
         "WORSENING":   "Worsening",
@@ -87,50 +118,75 @@ def capture():
 @bp.route("/capture/upload", methods=["POST"])
 def capture_upload():
     patient_id = (request.form.get("patient_id") or "").strip() or "UNKNOWN"
-
-    import random
-
-    # Generate result for Right Eye (OD)
-    if random.random() < 0.2:
-        res_od = make_stub_retake_result(patient_id, "OD")
-    else:
-        res_od = make_stub_result(patient_id, "OD")
-
-    # Generate result for Left Eye (OS)
-    if random.random() < 0.2:
-        res_os = make_stub_retake_result(patient_id, "OS")
-    else:
-        res_os = make_stub_result(patient_id, "OS")
-
-    # Store both individually
-    _results[res_od["screening_id"]] = res_od
-    _results[res_os["screening_id"]] = res_os
-
-    # Create a combined screening session
-    import uuid
-    session_id = str(uuid.uuid4())
-    _results["session_" + session_id] = {
-        "session_id": session_id,
-        "patient_id": patient_id,
-        "od_screening_id": res_od["screening_id"],
-        "os_screening_id": res_os["screening_id"],
+    uploads = {
+        "OD": request.files.get("image_od") or request.files.get("image_od_cam"),
+        "OS": request.files.get("image_os") or request.files.get("image_os_cam"),
     }
 
-    # If either eye needs retake, go to quality for the bad one first
-    od_retake = res_od["quality"]["verdict"] == "RETAKE"
-    os_retake = res_os["quality"]["verdict"] == "RETAKE"
+    if any(not upload or not upload.filename for upload in uploads.values()):
+        return render_template(
+            "_error.html",
+            title="Both eye images are required",
+            detail="Capture or upload one retinal image for each eye before starting analysis.",
+        ), 400
 
-    if od_retake or os_retake:
-        # Go to combined quality screen
+    allowed_extensions = {".jpg", ".jpeg", ".png"}
+    invalid_files = [
+        upload.filename
+        for upload in uploads.values()
+        if Path(upload.filename).suffix.lower() not in allowed_extensions
+    ]
+    if invalid_files:
+        return render_template(
+            "_error.html",
+            title="Use JPG or PNG images",
+            detail="Choose a retinal photo in JPG or PNG format for each eye.",
+        ), 400
+
+    capture_dir = Path("data") / "captures"
+    capture_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        results = {}
+        for eye, upload in uploads.items():
+            extension = Path(upload.filename).suffix.lower() or ".jpg"
+            image_path = capture_dir / f"{uuid.uuid4().hex}{extension}"
+            upload.save(image_path)
+            results[eye] = run_screening(
+                image_path=image_path,
+                patient_id=patient_id,
+                eye=eye,
+                operator_id=request.form.get("operator_id", ""),
+                phc_id=request.form.get("phc_id", ""),
+            )
+    except Exception:
+        return render_template(
+            "_error.html",
+            title="Screening could not start",
+            detail=(
+                "The local AI models are unavailable or could not read this image. "
+                "Check the model setup, then try again."
+            ),
+        ), 503
+
+    for result in results.values():
+        _results[result["screening_id"]] = result
+
+    session_id = str(uuid.uuid4())
+    _results[f"session_{session_id}"] = {
+        "session_id": session_id,
+        "patient_id": patient_id,
+        "od_screening_id": results["OD"]["screening_id"],
+        "os_screening_id": results["OS"]["screening_id"],
+    }
+    if any(result["quality"]["verdict"] == "RETAKE" for result in results.values()):
         return redirect(url_for("main.quality_combined", session_id=session_id))
-
-    # Both passed → go directly to combined result
     return redirect(url_for("main.result_combined", session_id=session_id))
 
 
 @bp.route("/quality/<screening_id>")
 def quality(screening_id):
-    res = _results.get(screening_id)
+    res = _get_result(screening_id)
     if not res:
         return render_template("_error.html",
                                title="Screening not found",
@@ -140,7 +196,7 @@ def quality(screening_id):
 
 @bp.route("/result/<screening_id>")
 def result(screening_id):
-    res = _results.get(screening_id)
+    res = _get_result(screening_id)
     if not res:
         return render_template("_error.html",
                                title="Result not found",
@@ -196,7 +252,7 @@ def report_combined_view(session_id):
 
 @bp.route("/report/<screening_id>/view")
 def report_view(screening_id):
-    res = _results.get(screening_id)
+    res = _get_result(screening_id)
     if not res:
         abort(404)
     html_content = render_result(res)
@@ -210,7 +266,7 @@ def history(patient_id=""):
         patient_id = request.args.get("patient_id", "")
 
     if patient_id:
-        history_data = make_stub_history(patient_id)
+        history_data = get_history(patient_id)
     else:
         history_data = []
 
@@ -222,14 +278,16 @@ def history(patient_id=""):
     )
 
 
-@bp.route("/artifacts/<path:path>")
-def serve_artifact(path):
-    """Serve XAI/segmentation images stored in the artifacts/ directory."""
-    root = os.path.abspath("artifacts")
-    target = os.path.abspath(os.path.join(root, path))
-    if not target.startswith(root):
+@bp.route("/media/<path:path>")
+def serve_capture_media(path):
+    """Serve only generated local screening media, never arbitrary files."""
+    root = (Path.cwd() / "data" / "captures").resolve()
+    target = (root / path).resolve()
+    try:
+        target.relative_to(root)
+    except ValueError:
         abort(403)
-    if not os.path.exists(target):
+    if not target.is_file():
         abort(404)
     return send_file(target)
 
@@ -246,7 +304,37 @@ def set_language():
 
 @bp.route("/api/screening/<screening_id>")
 def get_screening(screening_id):
-    res = _results.get(screening_id)
+    res = _get_result(screening_id)
     if not res:
         return jsonify({"error": "not found"}), 404
     return jsonify(res)
+
+
+@screening_bp.post("/screenings")
+def create_screening():
+    """JSON API for clients that already have a local image path."""
+    data = request.get_json(silent=True) or {}
+    image_path = data.get("image_path")
+    patient_id = data.get("patient_id")
+    if not image_path or not patient_id:
+        return jsonify({"error": "image_path and patient_id are required"}), 400
+    if not Path(image_path).exists():
+        return jsonify({"error": "image not found"}), 404
+
+    result = run_screening(
+        image_path=image_path,
+        patient_id=patient_id,
+        eye=data.get("eye", "OD"),
+        operator_id=data.get("operator_id", ""),
+        phc_id=data.get("phc_id", ""),
+    )
+    return jsonify(result), 200
+
+
+@screening_bp.get("/patients/<patient_id>/history")
+def patient_history(patient_id):
+    try:
+        limit = int(request.args.get("limit", 10))
+    except ValueError:
+        limit = 10
+    return jsonify(get_history(patient_id, limit=limit))
