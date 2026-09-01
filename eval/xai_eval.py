@@ -1,11 +1,18 @@
 """
 XAI evaluation harness (GUIDE_4_Anshika.md Part 4 - "XAI evaluation").
 
-Runs against core.stubs.xai_stub for now (Day 1-6). Once Kanchan's
-checkpoint lands, swap explain_fn to the real core.xai.explain.explain
-and these functions don't need to change -- same interface.
+Functions here are called by eval/run_all.py against the REAL pipeline
+(DRGrader + DRSegmenter + core.xai.explain.explain) whenever torch and
+both checkpoints are available -- see eval/run_all.py::_load_real_pipeline
+for the fallback-to-stub logic. These functions themselves are
+model-agnostic (they take cams/masks/predict_fn as plain arrays and
+callables), so they work unchanged with real or stub data.
 """
 import numpy as np
+
+# numpy.trapz was removed in NumPy 2.0, renamed to numpy.trapezoid.
+# This keeps deletion_insertion_auc working on both old and new NumPy.
+_trapz = getattr(np, "trapezoid", None) or np.trapz
 
 from core.xai import guards
 
@@ -38,17 +45,27 @@ def guard_trigger_rates(cams, fov_masks, lesion_masks=None):
 def lesion_localisation_hit_rate(cams, lesion_masks):
     """Fraction of images where the peak CAM pixel lands inside the
     annotated lesion mask. GUIDE_4_Anshika.md Part 4.
+
+    Images with an empty lesion mask (nothing predicted/annotated --
+    e.g. a genuine No-DR image where the segmenter found nothing) are
+    EXCLUDED, not counted as automatic misses. A peak pixel can never
+    land inside an empty mask, so including these images drags the
+    rate toward 0% without reflecting anything about CAM quality --
+    same reasoning as guards.cam_lesion_agreement's None-on-empty-CAM
+    behaviour, applied here to the empty-lesion-mask case instead.
     """
     hits = 0
     n = 0
     for cam, lesion_mask in zip(cams, lesion_masks):
         if lesion_mask is None:
             continue
-        n += 1
-        peak_idx = np.unravel_index(np.argmax(cam), cam.shape)
         lesion_bin = lesion_mask.astype(bool)
         if lesion_bin.ndim == 3:
             lesion_bin = lesion_bin.any(axis=2)
+        if not lesion_bin.any():
+            continue  # nothing to localise against -- exclude, don't count as a miss
+        n += 1
+        peak_idx = np.unravel_index(np.argmax(cam), cam.shape)
         if lesion_bin[peak_idx]:
             hits += 1
     return (hits / n) if n > 0 else None
@@ -57,9 +74,13 @@ def lesion_localisation_hit_rate(cams, lesion_masks):
 def deletion_insertion_auc(bgr, cam, predict_fn, class_idx, n_steps=20):
     """Deletion/insertion test (Petsiuk et al. 2018 RISE-style metric).
 
-    predict_fn(bgr_masked) -> probability for class_idx. This works with
-    ANY classifier callable, including a stub during development -- swap
-    in Kanchan's real grading model later without changing this function.
+    predict_fn(bgr_masked) -> probability for class_idx. Works with ANY
+    classifier callable -- with the real pipeline this is grader.predict,
+    which re-runs the full preprocessing (including CLAHE enhancement)
+    on each partially-masked image. That's a known limitation of this
+    metric with adaptive preprocessing: CLAHE's contrast adjustment can
+    behave slightly differently as more pixels get blanked out step by
+    step. Not a bug, just a caveat worth a line in BENCHMARKS.md if asked.
 
     Deletion: progressively zero out the highest-CAM pixels, track how
     fast p(class) drops. Sharp drop = CAM points at pixels the model
@@ -89,6 +110,6 @@ def deletion_insertion_auc(bgr, cam, predict_fn, class_idx, n_steps=20):
         img_ins[ys, xs] = bgr[ys, xs]
         insertion_probs.append(predict_fn(img_ins)[class_idx])
 
-    deletion_auc = float(np.trapezoid(deletion_probs) / len(deletion_probs))
-    insertion_auc = float(np.trapezoid(insertion_probs) / len(insertion_probs))
+    deletion_auc = float(_trapz(deletion_probs) / len(deletion_probs))
+    insertion_auc = float(_trapz(insertion_probs) / len(insertion_probs))
     return deletion_auc, insertion_auc

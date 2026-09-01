@@ -4,7 +4,8 @@ python eval/run_all.py
 Single command to regenerate the numbers in docs/BENCHMARKS.md.
 
 Runs the real pipeline (DRGrader + DRSegmenter + core.xai.explain.explain)
-against tests/fixtures/*.png when torch and both checkpoints are
+against every image in data/gradcam_compare/ (n=20, per GUIDE_4_Anshika.md's
+~20-image bar for guard trigger rates) when torch and both checkpoints are
 available, and falls back to the old synthetic-CAM path with a loud
 warning otherwise -- so the harness always runs, but never silently
 mislabels stub numbers as real ones.
@@ -25,17 +26,24 @@ from core.iqa.quality import assess_quality
 from eval.xai_eval import deletion_insertion_auc, lesion_localisation_hit_rate
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FIXTURES = os.path.join(REPO_ROOT, "tests", "fixtures")
+FIXTURES = os.path.join(REPO_ROOT, "data", "gradcam_compare")
 BENCHMARKS_PATH = os.path.join(REPO_ROOT, "docs", "BENCHMARKS.md")
-FIXTURE_NAMES = ("good.png", "blurry.png", "severe.png")
+FIXTURE_NAMES = None  # None = load every .png found in FIXTURES automatically
 
 
 def _load_fixtures():
+    if FIXTURE_NAMES is not None:
+        names = FIXTURE_NAMES
+    else:
+        names = sorted(
+            f for f in os.listdir(FIXTURES) if f.lower().endswith(".png")
+        )
+
     loaded = []
-    for name in FIXTURE_NAMES:
+    for name in names:
         img = cv2.imread(os.path.join(FIXTURES, name))
         if img is None:
-            print(f"  skip {name}: fixture not found")
+            print(f"  skip {name}: could not read")
             continue
         loaded.append((name, img))
     return loaded
@@ -85,8 +93,9 @@ def run_real_xai_eval(fixtures, pipeline):
         seg = segmenter.segment(bgr)
         lesion_mask = _combined_lesion_mask(seg)
 
+        sid = os.path.splitext(name)[0].replace(" ", "_").replace("(", "").replace(")", "")
         result = explain(bgr, model_handle, grading, lesion_mask, fov_mask,
-                          screening_id=name.replace(".png", ""))
+                          screening_id=sid)
 
         cam = cv2.imread(result["gradcam_path"], cv2.IMREAD_GRAYSCALE)
         cam = cam.astype(np.float32) / 255.0
@@ -116,15 +125,16 @@ def run_real_xai_eval(fixtures, pipeline):
 
         agree_str = ("n/a" if result["cam_lesion_agreement"] is None
                      else f"{result['cam_lesion_agreement']:.3f}")
-        print(f"  {name:12s} grade={grading['icdr_grade']} "
+        print(f"  {name:20s} grade={grading['icdr_grade']} "
               f"conf={grading['confidence']:.3f} "
               f"guard={result['guard_status']:16s} "
               f"agreement={agree_str} "
               f"del={del_auc:.4f} ins={ins_auc:.4f}")
 
     n = len(per_image)
+    statuses = sorted(set(r["guard_status"] for r in per_image))
     rates = {s: sum(1 for r in per_image if r["guard_status"] == s) / n
-             for s in ("OK", "CAM_OFF_RETINA", "LOW_AGREEMENT")}
+             for s in statuses}
 
     print(f"\n  guard trigger rates (n={n}):")
     for status, frac in rates.items():
@@ -209,12 +219,13 @@ def patch_benchmarks_xai_section(xai_result):
 
     if real:
         rates = xai_result["guard_trigger_rates"]
+        rate_lines = "\n".join(
+            f"| {status} | {frac * 100:.1f}% (n={n}) | preliminary, see per-image log |"
+            for status, frac in rates.items()
+        )
         content = content.replace(
             "| CAM_OFF_RETINA | TBD % | TBD |\n| LOW_AGREEMENT | TBD % | TBD |",
-            f"| CAM_OFF_RETINA | {rates['CAM_OFF_RETINA'] * 100:.1f}% (n={n}) | "
-            f"preliminary, see per-image log |\n"
-            f"| LOW_AGREEMENT | {rates['LOW_AGREEMENT'] * 100:.1f}% (n={n}) | "
-            f"preliminary, see per-image log |",
+            rate_lines,
         )
 
         dels = [r["deletion_auc"] for r in xai_result["per_image"]]
