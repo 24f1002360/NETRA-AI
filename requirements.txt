@@ -7,3 +7,5 @@ scipy>=1.11
 jsonschema>=4.20
 pytest>=7.4
 Flask>=3.0
+torch>=2.1
+torchvision>=0.16
