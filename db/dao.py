@@ -326,6 +326,39 @@ def get_history(
     return results
 
 
+def get_screening(
+    screening_id: str,
+    db_path: str | Path | None = None,
+) -> dict[str, Any] | None:
+    """Return one persisted ScreeningResult, or ``None`` when it is absent.
+
+    The UI reads the full stored contract rather than reconstructing a result
+    from denormalised database columns.
+    """
+
+    conn = get_connection(db_path)
+
+    try:
+        row = conn.execute(
+            """
+            SELECT result_json
+            FROM screenings
+            WHERE screening_id = ?
+            """,
+            (screening_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    if row is None:
+        return None
+
+    try:
+        return json.loads(row["result_json"])
+    except json.JSONDecodeError:
+        return None
+
+
 # ============================================================
 # LONGITUDINAL
 # ============================================================

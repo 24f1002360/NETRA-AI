@@ -6,17 +6,17 @@
 <div class="step-indicator" role="list" aria-label="Screening steps">
   <div class="step done" role="listitem">
     <div class="step__dot">✓</div>
-    <span>Capture</span>
+    <span>{{ bt('flow.capture') }}</span>
   </div>
   <div class="step__line done"></div>
   <div class="step active" role="listitem">
     <div class="step__dot">2</div>
-    <span>Quality</span>
+    <span>{{ bt('flow.quality') }}</span>
   </div>
   <div class="step__line"></div>
   <div class="step" role="listitem">
     <div class="step__dot">3</div>
-    <span>Result</span>
+    <span>{{ bt('flow.result') }}</span>
   </div>
 </div>
 
@@ -38,11 +38,11 @@
 <div class="verdict-hero {{ vclass }}" role="status" aria-live="assertive">
   <span class="verdict-icon">{{ vicon }}</span>
   {% if overall_verdict == 'PASS' %}
-    <span class="verdict-text">Good images — continue</span>
-    <p class="verdict-reason">The images meet quality requirements and are ready for analysis.</p>
+    <span class="verdict-text">{{ bt('quality.pass_heading') }}</span>
+    <p class="verdict-reason">{{ bt('quality.pass_help') }}</p>
   {% else %}
-    <span class="verdict-text">Please retake poor quality images</span>
-    <p class="verdict-reason">One or both images did not pass the quality check.</p>
+    <span class="verdict-text">{{ bt('quality.retake_heading') }}</span>
+    <p class="verdict-reason">{{ bt('quality.retake_help') }}</p>
   {% endif %}
 </div>
 
@@ -57,16 +57,16 @@
     <div class="eye-result-panel" style="{% if verdict == 'RETAKE' %}border-color:var(--red);box-shadow:0 0 0 1px var(--red){% endif %}">
       <div class="eye-result-panel__header">
         <span class="eye-glyph-sm">👁</span>
-        <strong>{{ eye_label }} ({{ eye_data.eye }})</strong>
+        <strong>{{ bt('capture.eye_od') if eye_data.eye == 'OD' else bt('capture.eye_os') }}</strong>
       </div>
       
       {% if verdict == 'RETAKE' %}
-        <div class="eye-action-chip urgent" style="margin-bottom:12px">✕ Retake Required</div>
+        <div class="eye-action-chip urgent" style="margin-bottom:12px">✕ {{ bt('quality.retake_required') }}</div>
         <p style="font-size:0.85rem;color:var(--red);font-weight:600;margin-bottom:12px">
           {{ t(eye_data.quality.operator_message_key) }}
         </p>
       {% else %}
-        <div class="eye-action-chip routine" style="margin-bottom:12px">✓ Quality Pass</div>
+        <div class="eye-action-chip routine" style="margin-bottom:12px">✓ {{ bt('quality.pass_badge') }}</div>
       {% endif %}
 
       <div class="scores-grid" style="margin-top:12px">
@@ -85,10 +85,10 @@
         </div>
         {% endmacro %}
 
-        {{ score_bar(t('quality.scores.blur'),         scores.blur) }}
-        {{ score_bar(t('quality.scores.illumination'), scores.illumination) }}
-        {{ score_bar(t('quality.scores.fov'),          scores.fov_coverage) }}
-        {{ score_bar(t('quality.scores.contrast'),     scores.contrast) }}
+        {{ score_bar(bt('quality.scores.blur'),         scores.blur) }}
+        {{ score_bar(bt('quality.scores.illumination'), scores.illumination) }}
+        {{ score_bar(bt('quality.scores.fov'),          scores.fov_coverage) }}
+        {{ score_bar(bt('quality.scores.contrast'),     scores.contrast) }}
       </div>
     </div>
   {% endmacro %}
@@ -120,7 +120,7 @@
      class="btn btn-ghost btn-lg btn-full"
      style="margin-top:12px"
      id="btn-new-screening">
-    Start new screening
+    {{ bt('capture.new_screening') }}
   </a>
 </div>
 {% endblock %}

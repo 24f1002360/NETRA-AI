@@ -7,5 +7,10 @@ scipy>=1.11
 jsonschema>=4.20
 pytest>=7.4
 Flask>=3.0
+# Production inference and model explainability
+torch>=2.5
+torchvision>=0.20
+# District-capacity simulation charts
+matplotlib>=3.8
 torch>=2.1
 torchvision>=0.16

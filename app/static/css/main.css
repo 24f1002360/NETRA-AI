@@ -158,6 +158,26 @@ a:hover { text-decoration: underline; }
 }
 .lang-select:focus { outline: 2px solid var(--teal); outline-offset: 2px; }
 
+/* Local-language-first labels. English stays available as a compact helper
+   for supervisors without competing with the operator's selected language. */
+.bilingual-label {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.15;
+  vertical-align: middle;
+}
+.bilingual-label__primary { font: inherit; }
+.bilingual-label__english {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: .68em;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.btn .bilingual-label__english,
+.nav-link .bilingual-label__english { color: inherit; opacity: .78; }
+
 main.page-content {
   max-width: 900px;
   width: 100%;
