@@ -89,6 +89,6 @@ def deletion_insertion_auc(bgr, cam, predict_fn, class_idx, n_steps=20):
         img_ins[ys, xs] = bgr[ys, xs]
         insertion_probs.append(predict_fn(img_ins)[class_idx])
 
-    deletion_auc = float(np.trapz(deletion_probs) / len(deletion_probs))
-    insertion_auc = float(np.trapz(insertion_probs) / len(insertion_probs))
+    deletion_auc = float(np.trapezoid(deletion_probs) / len(deletion_probs))
+    insertion_auc = float(np.trapezoid(insertion_probs) / len(insertion_probs))
     return deletion_auc, insertion_auc

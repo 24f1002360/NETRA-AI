@@ -8,8 +8,10 @@ Returns the `xai` block of the ScreeningResult contract
 diagnostics for eval/, pop them before schema validation -- same pattern
 as `_mask` in core/iqa/quality.py.
 
-model_handle is None until Kanchan's Day-7 handoff, so this falls back to
-core.stubs.xai_stub and the rest of the pipeline is never blocked.
+model_handle is None whenever the real model/checkpoint isn't available
+to the caller (e.g. checkpoint missing locally, or explain() called
+directly without one), so this falls back to core.stubs.xai_stub and
+the rest of the pipeline is never blocked.
 """
 import os
 import time
@@ -40,6 +42,16 @@ def explain(bgr, model_handle, grading, lesion_mask, fov_mask,
         return result
 
     cam, class_idx = _run_gradcam(bgr, model_handle, grading)
+
+    # fov_mask and lesion_mask are almost never the same shape as the CAM
+    # (the model's fixed input size, e.g. 384x384). Resize both to the
+    # CAM's shape before any guard math -- otherwise cam * fov_mask
+    # raises a shape-mismatch error, or silently broadcasts wrong.
+    # Nearest-neighbour to keep masks binary.
+    fov_mask = _resize_mask_to(fov_mask, cam.shape)
+    if lesion_mask is not None:
+        lesion_mask = _resize_mask_to(lesion_mask, cam.shape)
+
     cam = guards.zero_outside_fov(cam, fov_mask)
 
     outside_frac = guards.cam_outside_fov_fraction(cam, fov_mask)
@@ -79,6 +91,16 @@ def _run_gradcam(bgr, model_handle, grading):
     return engine(input_tensor, class_idx=class_idx)
 
 
+def _resize_mask_to(mask, target_hw):
+    """Resize a binary/float mask to (H, W) = target_hw[:2] with
+    nearest-neighbour interpolation so it stays binary."""
+    h, w = target_hw[0], target_hw[1]
+    if mask.shape[:2] == (h, w):
+        return mask
+    return cv2.resize(mask, (w, h), interpolation=cv2.INTER_NEAREST)
+
+
 def _overlay(bgr, cam, alpha=0.45):
     heat = cv2.applyColorMap((cam * 255).astype(np.uint8), cv2.COLORMAP_JET)
+    heat = cv2.resize(heat, (bgr.shape[1], bgr.shape[0]))
     return cv2.addWeighted(heat, alpha, bgr, 1 - alpha, 0)
