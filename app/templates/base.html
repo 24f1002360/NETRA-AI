@@ -22,12 +22,12 @@
       <a href="{{ url_for('main.capture') }}"
          class="nav-link {% if active_page == 'capture' %}active{% endif %}"
          id="nav-capture">
-        <span>＋</span> {{ t('nav.capture') }}
+        <span>＋</span> {{ bt('nav.capture') }}
       </a>
       <a href="{{ url_for('main.history', patient_id='') }}"
          class="nav-link {% if active_page == 'history' %}active{% endif %}"
          id="nav-history">
-        <span>📋</span> {{ t('nav.history') }}
+        <span>📋</span> {{ bt('nav.history') }}
       </a>
     </nav>
 

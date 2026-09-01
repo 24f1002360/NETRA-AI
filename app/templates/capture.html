@@ -6,17 +6,17 @@
 <div class="step-indicator" role="list" aria-label="Screening steps">
   <div class="step active" role="listitem">
     <div class="step__dot">1</div>
-    <span class="step__name">Capture</span>
+    <span class="step__name">{{ bt('flow.capture') }}</span>
   </div>
   <div class="step__line"></div>
   <div class="step" role="listitem">
     <div class="step__dot">2</div>
-    <span class="step__name">Quality</span>
+    <span class="step__name">{{ bt('flow.quality') }}</span>
   </div>
   <div class="step__line"></div>
   <div class="step" role="listitem">
     <div class="step__dot">3</div>
-    <span class="step__name">Result</span>
+    <span class="step__name">{{ bt('flow.result') }}</span>
   </div>
 </div>
 
@@ -28,13 +28,13 @@
   </div>
   <div class="status-chip" id="status-camera">
     <span class="status-chip__dot"></span>
-    <span id="camera-status-text">Checking camera…</span>
+    <span id="camera-status-text">{{ bt('capture.camera_check') }}</span>
   </div>
 </div>
 
 <div class="card">
-  <h1 class="page-title">New Screening</h1>
-  <p class="page-subtitle">Enter patient details, then capture both eyes.</p>
+  <h1 class="page-title">{{ bt('capture.new_screening') }}</h1>
+  <p class="page-subtitle">{{ bt('capture.intro') }}</p>
 
   <form action="{{ url_for('main.capture_upload') }}" method="POST"
         enctype="multipart/form-data" id="capture-form" novalidate>
@@ -61,8 +61,8 @@
 
     <!-- ===== BOTH EYES CAPTURE SECTION ===== -->
     <div class="eyes-capture-section">
-      <h2 class="section-heading">Capture Both Eyes</h2>
-      <p class="page-subtitle" style="margin-bottom:16px">Capture or upload an image for each eye. Both are required.</p>
+      <h2 class="section-heading">{{ bt('capture.both_eyes') }}</h2>
+      <p class="page-subtitle" style="margin-bottom:16px">{{ bt('capture.both_eyes.help') }}</p>
 
       <div class="eye-capture-grid">
 
@@ -71,8 +71,8 @@
           <div class="eye-capture-card__header">
             <span class="eye-capture-card__glyph">👁</span>
             <div>
-              <strong>Right Eye (OD)</strong>
-              <span class="eye-capture-card__sub">Capture first</span>
+              <strong>{{ bt('capture.eye_od') }}</strong>
+              <span class="eye-capture-card__sub">{{ bt('capture.eye_od.help') }}</span>
             </div>
           </div>
 
@@ -82,7 +82,7 @@
             <canvas id="canvas-od" style="display:none"></canvas>
             <div class="viewfinder__overlay" id="overlay-od">
               <div class="viewfinder__reticle"></div>
-              <span>Position pupil in centre</span>
+              <span>{{ bt('capture.position') }}</span>
             </div>
           </div>
 
@@ -97,10 +97,10 @@
           <!-- Capture / Upload buttons -->
           <div class="eye-capture-actions" id="actions-od">
             <button type="button" class="btn btn-primary btn-capture-eye" id="btn-capture-od" data-eye="od">
-              📷 Capture
+              📷 {{ bt('capture.button') }}
             </button>
             <label class="btn btn-ghost btn-sm upload-label">
-              📂 Upload
+              📂 {{ bt('capture.upload') }}
               <input type="file" id="file-od" name="image_od" accept="image/jpeg,image/png" style="display:none">
             </label>
           </div>
@@ -108,7 +108,7 @@
           <!-- Status indicator -->
           <div class="eye-status" id="status-od">
             <span class="eye-status__dot pending"></span>
-            <span id="status-text-od">Waiting…</span>
+            <span id="status-text-od">{{ bt('capture.waiting') }}</span>
           </div>
 
           <!-- Hidden input for camera-captured blob -->
@@ -120,8 +120,8 @@
           <div class="eye-capture-card__header">
             <span class="eye-capture-card__glyph">👁</span>
             <div>
-              <strong>Left Eye (OS)</strong>
-              <span class="eye-capture-card__sub">Capture second</span>
+              <strong>{{ bt('capture.eye_os') }}</strong>
+              <span class="eye-capture-card__sub">{{ bt('capture.eye_os.help') }}</span>
             </div>
           </div>
 
@@ -131,7 +131,7 @@
             <canvas id="canvas-os" style="display:none"></canvas>
             <div class="viewfinder__overlay" id="overlay-os">
               <div class="viewfinder__reticle"></div>
-              <span>Position pupil in centre</span>
+              <span>{{ bt('capture.position') }}</span>
             </div>
           </div>
 
@@ -146,10 +146,10 @@
           <!-- Capture / Upload buttons -->
           <div class="eye-capture-actions" id="actions-os">
             <button type="button" class="btn btn-primary btn-capture-eye" id="btn-capture-os" data-eye="os">
-              📷 Capture
+              📷 {{ bt('capture.button') }}
             </button>
             <label class="btn btn-ghost btn-sm upload-label">
-              📂 Upload
+              📂 {{ bt('capture.upload') }}
               <input type="file" id="file-os" name="image_os" accept="image/jpeg,image/png" style="display:none">
             </label>
           </div>
@@ -157,7 +157,7 @@
           <!-- Status indicator -->
           <div class="eye-status" id="status-os">
             <span class="eye-status__dot pending"></span>
-            <span id="status-text-os">Waiting…</span>
+            <span id="status-text-os">{{ bt('capture.waiting') }}</span>
           </div>
 
           <input type="file" id="blob-os" name="image_os_cam" style="display:none">
@@ -172,10 +172,10 @@
     <!-- Submit -->
     <div class="mt-l">
       <button type="submit" id="btn-submit" class="btn btn-teal btn-xl btn-full" disabled>
-        Analyse Both Eyes →
+        {{ bt('capture.analyse_both') }} →
       </button>
       <p class="text-subtle mt-s" style="font-size:.8rem;text-align:center" id="submit-hint">
-        JPG or PNG only, up to 10 MB each. Capture both eyes to enable analysis.
+        {{ bt('capture.file_rules') }}
       </p>
     </div>
 
