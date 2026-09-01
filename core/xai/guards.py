@@ -40,15 +40,17 @@ def top_quantile_mask(cam, quantile=TOP_QUANTILE):
 
 
 def cam_lesion_agreement(cam, lesion_mask, quantile=TOP_QUANTILE):
-    """|top20%_CAM ∩ lesion_mask| / |top20%_CAM|.
-    Returns None (not 0.0) if the CAM has no positive energy -- can't
-    evaluate agreement, and reporting 0 would overstate disagreement."""
     top = top_quantile_mask(cam, quantile)
     if top.sum() == 0:
         return None
     lesion_bin = lesion_mask.astype(bool)
     if lesion_bin.ndim == 3:
         lesion_bin = lesion_bin.any(axis=2)
+    if lesion_bin.sum() == 0:
+        # No lesions were segmented at all (e.g. a genuine No-DR image) --
+        # there is nothing for the CAM to agree or disagree with, so this
+        # is not evaluable, not automatic disagreement.
+        return None
     inter = np.logical_and(top, lesion_bin).sum()
     return float(inter / top.sum())
 
