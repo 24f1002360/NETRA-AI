@@ -46,7 +46,16 @@
 
   "iqa.pass": "Good image — continue",
   "iqa.auto_corrected": "Image auto-corrected and accepted",
+  "iqa.corrected": "Image auto-corrected and accepted",
   "iqa.retake.blur": "Image is blurry — hold the camera steady",
+  "iqa.retake.blur_high": "Image is blurry — hold the camera steady",
+  "iqa.retake.too_dark": "Image is too dark — improve the lighting",
+  "iqa.retake.too_bright": "Image is too bright — reduce the flash or lighting",
+  "iqa.retake.fov_partial": "Eye is not fully visible — move the camera back",
+  "iqa.retake.low_contrast": "Image contrast is too low — improve the lighting",
+  "iqa.retake.off_centre": "Eye is off-centre — reposition the camera",
+  "iqa.retake.iqa_error": "Image quality could not be checked — retake the photo",
+  "iqa.retake.unknown": "Image needs to be retaken — capture a clear, centred photo",
   "iqa.retake.dark": "Image is too dark — increase lighting",
   "iqa.retake.bright": "Image is too bright — reduce flash",
   "iqa.retake.offcenter": "Eye is off-centre — reposition camera",
@@ -107,5 +116,6 @@
   "error.upload_failed": "Image upload failed — please try again",
   "error.no_image": "Please capture or upload an image first",
   "error.no_patient_id": "Please enter a Patient ID before capturing",
-  "error.no_eye": "Please select which eye (Right OD / Left OS)"
+  "error.no_eye": "Please select which eye (Right OD / Left OS)",
+  "ui.text_unavailable": "Text unavailable"
 }
