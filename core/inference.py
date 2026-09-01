@@ -1,41 +1,14 @@
 from __future__ import annotations
 
-"""
-NETRA-AI end-to-end inference orchestrator.
+"""NETRA-AI end-to-end screening orchestrator.
+
+This file is the integration layer between the team's modules. It deliberately
+keeps the module contract stable while tolerating the current real-model
+implementations used in this repository.
 
 Pipeline:
-
-    Image
-      ↓
-    Muskan IQA / Quality Gate
-      ↓
-    Kanchan DR grading
-      ↓
-    Kanchan lesion segmentation
-      ↓
-    Anshika XAI + guards
-      ↓
-    Divyanshu routing
-      ↓
-    ScreeningResult
-
-Important integration notes:
-
-1. Kanchan's current grading.py already calls Muskan's enhance()
-   internally. Therefore this file passes the RAW image to grading
-   to avoid double enhancement.
-
-2. Kanchan's current segmentation.py returns a dictionary, while
-   the original interface document described (lesions, mask).
-   This file supports both formats.
-
-3. Anshika's real core/xai/explain.py is not yet present in the
-   supplied repository. Until it is added, the existing XAI stub
-   is used so the complete pipeline can still run.
-
-4. Database persistence/history belongs to Divyanshu's db/ layer.
-   This file computes routing and supports an optional prior_result,
-   but does not invent a database implementation.
+    image -> IQA -> (retake OR) enhancement -> grading -> segmentation
+           -> XAI/guards -> longitudinal comparison -> routing -> DB
 """
 
 import importlib
@@ -52,69 +25,26 @@ import yaml
 from core.contracts import new_result
 from core.iqa.enhance import enhance, resize_for_processing
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-
 APP_CONFIG_PATH = PROJECT_ROOT / "configs" / "app.yaml"
 THRESHOLDS_PATH = PROJECT_ROOT / "configs" / "thresholds.yaml"
 
 logger = logging.getLogger(__name__)
 
-
-# ============================================================
-# MODULE REGISTRY
-# ============================================================
-
 MODULE_PATHS = {
-    "iqa": {
-        "stub": "core.stubs.iqa_stub",
-        "real": "core.iqa.quality",
-    },
-
-    "grading": {
-        "stub": "core.stubs.grading_stub",
-        "real": "core.models.grading",
-    },
-
-    "segmentation": {
-        "stub": "core.stubs.segmentation_stub",
-        "real": "core.models.segmentation",
-    },
-
-    "xai": {
-        "stub": "core.stubs.xai_stub",
-        "real": "core.xai.explain",
-    },
+    "iqa": {"stub": "core.stubs.iqa_stub", "real": "core.iqa.quality"},
+    "grading": {"stub": "core.stubs.grading_stub", "real": "core.models.grading"},
+    "segmentation": {"stub": "core.stubs.segmentation_stub", "real": "core.models.segmentation"},
+    "xai": {"stub": "core.stubs.xai_stub", "real": "core.xai.explain"},
 }
-
-
-# ============================================================
-# DEFAULT CONFIG
-# ============================================================
 
 DEFAULT_CONFIG = {
     "runtime": "pytorch",
-
-    "modules": {
-        "iqa": "real",
-        "grading": "real",
-        "segmentation": "real",
-        "xai": "real",
-    },
-
-    "alerts": {
-        "enabled": False,
-    },
-
-    "database": {
-        "path": "data/netra.db",
-    },
-
-    "sync": {
-        "enabled": True,
-    },
+    "modules": {"iqa": "real", "grading": "real", "segmentation": "real", "xai": "real"},
+    "alerts": {"enabled": False},
+    "database": {"path": "data/netra.db"},
+    "sync": {"enabled": True, "interval_seconds": 30, "max_attempts": 5},
 }
-
 
 DEFAULT_ROUTING = {
     "urgent_grade": 4,
@@ -124,765 +54,92 @@ DEFAULT_ROUTING = {
 }
 
 
-# ============================================================
-# CONFIGURATION
-# ============================================================
-
-def load_config(
-    path: str | Path = APP_CONFIG_PATH,
-) -> dict[str, Any]:
-    """
-    Load NETRA application configuration.
-
-    If configs/app.yaml does not exist, use a safe default
-    configuration so the project can still run.
-    """
-
-    path = Path(path)
-
-    if not path.exists():
-
-        cfg = _deep_copy(DEFAULT_CONFIG)
-
-        # Anshika's real explain.py is currently absent.
-        real_xai = (
-            PROJECT_ROOT
-            / "core"
-            / "xai"
-            / "explain.py"
-        )
-
-        if real_xai.exists():
-            cfg["modules"]["xai"] = "real"
-        else:
-            cfg["modules"]["xai"] = "stub"
-
-        return cfg
-
-    with path.open(
-        "r",
-        encoding="utf-8",
-    ) as f:
-
-        loaded = yaml.safe_load(f) or {}
-
-    cfg = _deep_merge(
-        _deep_copy(DEFAULT_CONFIG),
-        loaded,
-    )
-
-    # Do not select a real XAI implementation that
-    # does not exist yet.
-    if cfg["modules"].get("xai") == "real":
-
-        real_xai = (
-            PROJECT_ROOT
-            / "core"
-            / "xai"
-            / "explain.py"
-        )
-
-        if not real_xai.exists():
-            cfg["modules"]["xai"] = "stub"
-
-    return cfg
-
-
-def load_thresholds(
-    path: str | Path = THRESHOLDS_PATH,
-) -> dict[str, Any]:
-
-    defaults = {
-        "routing": dict(DEFAULT_ROUTING)
-    }
-
-    path = Path(path)
-
-    if not path.exists():
-        return defaults
-
-    with path.open(
-        "r",
-        encoding="utf-8",
-    ) as f:
-
-        loaded = yaml.safe_load(f) or {}
-
-    routing = dict(DEFAULT_ROUTING)
-
-    routing.update(
-        loaded.get("routing", {}) or {}
-    )
-
-    return {
-        "routing": routing
-    }
-
-
 def _deep_copy(value: Any) -> Any:
-
     if isinstance(value, dict):
-        return {
-            k: _deep_copy(v)
-            for k, v in value.items()
-        }
-
+        return {k: _deep_copy(v) for k, v in value.items()}
     if isinstance(value, list):
-        return [
-            _deep_copy(v)
-            for v in value
-        ]
-
+        return [_deep_copy(v) for v in value]
     return value
 
 
-def _deep_merge(
-    base: dict[str, Any],
-    extra: dict[str, Any],
-) -> dict[str, Any]:
-
+def _deep_merge(base: dict[str, Any], extra: dict[str, Any]) -> dict[str, Any]:
     for key, value in extra.items():
-
-        if (
-            isinstance(value, dict)
-            and isinstance(base.get(key), dict)
-        ):
-            _deep_merge(
-                base[key],
-                value,
-            )
-
+        if isinstance(value, dict) and isinstance(base.get(key), dict):
+            _deep_merge(base[key], value)
         else:
             base[key] = value
-
     return base
 
 
-# ============================================================
-# MODULE LOADING
-# ============================================================
+def load_config(path: str | Path = APP_CONFIG_PATH) -> dict[str, Any]:
+    path = Path(path)
+    if not path.is_absolute():
+        path = PROJECT_ROOT / path
+    if not path.exists():
+        return _deep_copy(DEFAULT_CONFIG)
+    with path.open("r", encoding="utf-8") as f:
+        loaded = yaml.safe_load(f) or {}
+    return _deep_merge(_deep_copy(DEFAULT_CONFIG), loaded)
 
-def load_module(
-    name: str,
-    mode: str,
-):
 
+def load_thresholds(path: str | Path = THRESHOLDS_PATH) -> dict[str, Any]:
+    path = Path(path)
+    if not path.is_absolute():
+        path = PROJECT_ROOT / path
+    result = {"routing": dict(DEFAULT_ROUTING)}
+    if not path.exists():
+        return result
+    with path.open("r", encoding="utf-8") as f:
+        loaded = yaml.safe_load(f) or {}
+    result["routing"].update(loaded.get("routing") or {})
+    return result
+
+
+def load_module(name: str, mode: str):
     if name not in MODULE_PATHS:
-        raise ValueError(
-            f"Unknown module: {name}"
-        )
-
+        raise ValueError(f"Unknown module: {name}")
     if mode not in MODULE_PATHS[name]:
-        raise ValueError(
-            f"Unsupported mode '{mode}' "
-            f"for module '{name}'"
-        )
-
-    module_path = MODULE_PATHS[name][mode]
-
-    return importlib.import_module(
-        module_path
-    )
+        raise ValueError(f"Unsupported mode '{mode}' for module '{name}'")
+    return importlib.import_module(MODULE_PATHS[name][mode])
 
 
 @lru_cache(maxsize=None)
-def _load_model_object(
-    name: str,
-    mode: str,
-):
-
-    module = load_module(
-        name,
-        mode,
-    )
-
-    # Current Kanchan grading implementation
-    if (
-        name == "grading"
-        and hasattr(module, "DRGrader")
-    ):
+def _load_model_object(name: str, mode: str):
+    module = load_module(name, mode)
+    if name == "grading" and hasattr(module, "DRGrader"):
         return module.DRGrader()
-
-    # Current Kanchan segmentation implementation
-    if (
-        name == "segmentation"
-        and hasattr(module, "DRSegmenter")
-    ):
+    if name == "segmentation" and hasattr(module, "DRSegmenter"):
         return module.DRSegmenter()
-
     return module
 
 
-# ============================================================
-# IMAGE LOADING
-# ============================================================
-
-def load_image(
-    image_path: str | Path,
-) -> np.ndarray:
-
+def load_image(image_path: str | Path) -> np.ndarray:
     path = Path(image_path)
-
     if not path.exists():
-        raise FileNotFoundError(
-            f"Fundus image not found: {path}"
-        )
-
-    image = cv2.imread(
-        str(path),
-        cv2.IMREAD_COLOR,
-    )
-
+        raise FileNotFoundError(f"Fundus image not found: {path}")
+    image = cv2.imread(str(path), cv2.IMREAD_COLOR)
     if image is None:
-        raise FileNotFoundError(
-            f"Unable to read fundus image: {path}"
-        )
-
+        raise FileNotFoundError(f"Unable to read fundus image: {path}")
     if image.dtype != np.uint8:
-        image = image.astype(
-            np.uint8
-        )
-
+        image = image.astype(np.uint8)
     return image
 
 
-# ============================================================
-# KANCHAN — GRADING ADAPTER
-# ============================================================
-
-def _call_grade(
-    module_or_model: Any,
-    bgr: np.ndarray,
-) -> dict[str, Any]:
-
-    # Module/function style
-    if callable(
-        getattr(
-            module_or_model,
-            "grade",
-            None,
-        )
-    ):
-        return module_or_model.grade(
-            bgr
-        )
-
-    raise AttributeError(
-        "Grading module must expose "
-        "grade(bgr) or DRGrader.grade()."
-    )
-
-
-# ============================================================
-# KANCHAN — SEGMENTATION ADAPTER
-# ============================================================
-
-def _call_segment(
-    module_or_model: Any,
-    bgr: np.ndarray,
-) -> tuple[
-    dict[str, Any],
-    np.ndarray | None,
-]:
-
-    if not hasattr(
-        module_or_model,
-        "segment",
-    ):
-        raise AttributeError(
-            "Segmentation module must expose "
-            "segment(bgr)."
-        )
-
-    raw = module_or_model.segment(
-        bgr
-    )
-
-    # Original contract:
-    #
-    #     segment(bgr) -> (lesions, mask)
-    #
-    if (
-        isinstance(raw, tuple)
-        and len(raw) == 2
-    ):
-
-        lesions, mask = raw
-
-        return (
-            _normalise_lesions(
-                lesions
-            ),
-            _normalise_mask_stack(
-                mask
-            ),
-        )
-
-    # Current Kanchan implementation:
-    #
-    #     segment(bgr) -> dict
-    #
-    if isinstance(raw, dict):
-
-        return _normalise_segmentation_dict(
-            raw
-        )
-
-    raise TypeError(
-        "Unsupported segmentation output: "
-        f"{type(raw).__name__}"
-    )
-
-
-def _normalise_segmentation_dict(
-    raw: dict[str, Any],
-) -> tuple[
-    dict[str, Any],
-    np.ndarray | None,
-]:
-
-    masks = raw.get(
-        "masks"
-    ) or {}
-
-    statistics = raw.get(
-        "statistics"
-    ) or {}
-
-    lesion_names = {
-        "MA": "microaneurysms",
-        "HE": "haemorrhages",
-        "EX": "hard_exudates",
-        "SE": "soft_exudates",
-    }
-
-    counts = {}
-
-    for (
-        short_name,
-        contract_name,
-    ) in lesion_names.items():
-
-        mask = masks.get(
-            short_name
-        )
-
-        if mask is None:
-            counts[contract_name] = 0
-            continue
-
-        mask_bin = (
-            np.asarray(mask) > 0
-        )
-
-        counts[
-            contract_name
-        ] = _connected_component_count(
-            mask_bin
-        )
-
-    # Current Kanchan implementation reports
-    # percentage coverage.
-    #
-    # Contract expects fraction 0..1.
-
-    area_fraction = {
-        "hard_exudates": 0.0,
-        "haemorrhages": 0.0,
-    }
-
-    for (
-        short_name,
-        contract_name,
-    ) in (
-        ("EX", "hard_exudates"),
-        ("HE", "haemorrhages"),
-    ):
-
-        stat = statistics.get(
-            short_name
-        ) or {}
-
-        percentage = stat.get(
-            "percentage",
-            0.0,
-        )
-
-        area_fraction[
-            contract_name
-        ] = float(
-            np.clip(
-                float(percentage)
-                / 100.0,
-                0.0,
-                1.0,
-            )
-        )
-
-    lesions = {
-        "mask_path": "",
-        "counts": counts,
-        "area_fraction": area_fraction,
-        "model_version": raw.get(
-            "model_version"
-        ),
-    }
-
-    mask_stack = _masks_to_stack(
-        masks
-    )
-
-    return (
-        lesions,
-        mask_stack,
-    )
-
-
-def _normalise_lesions(
-    lesions: Any,
-) -> dict[str, Any]:
-
-    if not isinstance(
-        lesions,
-        dict,
-    ):
-        raise TypeError(
-            "Lesions block must be a dictionary."
-        )
-
-    counts = (
-        lesions.get(
-            "counts",
-            {},
-        )
-        or {}
-    )
-
-    area_fraction = (
-        lesions.get(
-            "area_fraction",
-            {},
-        )
-        or {}
-    )
-
+def _empty_quality() -> dict[str, Any]:
     return {
-        "mask_path": lesions.get(
-            "mask_path",
-            "",
-        ),
-
-        "counts": {
-            "microaneurysms": int(
-                counts.get(
-                    "microaneurysms",
-                    0,
-                )
-            ),
-
-            "haemorrhages": int(
-                counts.get(
-                    "haemorrhages",
-                    0,
-                )
-            ),
-
-            "hard_exudates": int(
-                counts.get(
-                    "hard_exudates",
-                    0,
-                )
-            ),
-
-            "soft_exudates": int(
-                counts.get(
-                    "soft_exudates",
-                    0,
-                )
-            ),
-        },
-
-        "area_fraction": {
-            "hard_exudates": float(
-                area_fraction.get(
-                    "hard_exudates",
-                    0.0,
-                )
-            ),
-
-            "haemorrhages": float(
-                area_fraction.get(
-                    "haemorrhages",
-                    0.0,
-                )
-            ),
-        },
-
-        "model_version": lesions.get(
-            "model_version"
-        ),
+        "verdict": "RETAKE",
+        "scores": {"blur": 0.0, "illumination": 0.0, "fov_coverage": 0.0, "contrast": 0.0, "artefact": 0.0, "centre_offset": 1.0},
+        "reasons": ["IQA_ERROR"],
+        "operator_message_key": "iqa.retake.iqa_error",
+        "enhancement_applied": [],
     }
 
 
-def _normalise_mask_stack(
-    mask: Any,
-) -> np.ndarray | None:
-
-    if mask is None:
-        return None
-
-    arr = np.asarray(mask)
-
-    if arr.ndim == 2:
-        return arr.astype(
-            np.uint8
-        )
-
-    if arr.ndim == 3:
-
-        if arr.shape[2] == 4:
-            return arr.astype(
-                np.uint8
-            )
-
-        if arr.shape[0] == 4:
-            return np.transpose(
-                arr,
-                (1, 2, 0),
-            ).astype(
-                np.uint8
-            )
-
-    raise ValueError(
-        f"Unsupported lesion mask shape: "
-        f"{arr.shape}"
-    )
-
-
-def _masks_to_stack(
-    masks: dict[str, Any],
-) -> np.ndarray | None:
-
-    ordered = []
-
-    for key in (
-        "MA",
-        "HE",
-        "EX",
-        "SE",
-    ):
-
-        if key not in masks:
-            continue
-
-        arr = np.asarray(
-            masks[key]
-        )
-
-        if arr.ndim != 2:
-            continue
-
-        ordered.append(
-            (arr > 0).astype(
-                np.uint8
-            )
-        )
-
-    if not ordered:
-        return None
-
-    return np.stack(
-        ordered,
-        axis=-1,
-    )
-
-
-def _connected_component_count(
-    mask: np.ndarray,
-) -> int:
-
-    mask_u8 = (
-        mask > 0
-    ).astype(
-        np.uint8
-    )
-
-    if mask_u8.size == 0:
-        return 0
-
-    n_labels, _, _, _ = (
-        cv2.connectedComponentsWithStats(
-            mask_u8,
-            connectivity=8,
-        )
-    )
-
-    return max(
-        0,
-        int(n_labels) - 1,
-    )
-
-
-def _combined_lesion_mask(
-    mask: np.ndarray | None,
-) -> np.ndarray | None:
-
-    if mask is None:
-        return None
-
-    arr = np.asarray(mask)
-
-    if arr.ndim == 2:
-        return (
-            arr > 0
-        ).astype(
-            np.uint8
-        )
-
-    if arr.ndim == 3:
-
-        if arr.shape[2] == 4:
-            return (
-                arr.any(axis=2)
-            ).astype(
-                np.uint8
-            )
-
-        if arr.shape[0] == 4:
-            return (
-                arr.any(axis=0)
-            ).astype(
-                np.uint8
-            )
-
-    return None
-
-
-def _resize_mask(
-    mask: np.ndarray | None,
-    shape_hw: tuple[int, int],
-):
-
-    if mask is None:
-        return None
-
-    h, w = shape_hw
-
-    return cv2.resize(
-        (mask > 0).astype(
-            np.uint8
-        ),
-        (w, h),
-        interpolation=cv2.INTER_NEAREST,
-    )
-
-
-# ============================================================
-# RUNTIME ARTIFACTS
-# ============================================================
-
-def _save_runtime_artifacts(
-    screening_id: str,
-    raw_bgr: np.ndarray,
-    quality: dict[str, Any],
-    fov_mask: np.ndarray | None,
-    lesion_mask: np.ndarray | None,
-    output_dir: str | Path | None,
-) -> tuple[str, str]:
-
-    if output_dir is None:
-        return "", ""
-
-    root = (
-        Path(output_dir)
-        / screening_id
-    )
-
-    root.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
-
-    # Processed image is for UI/report display.
-    processed = enhance(
-        raw_bgr,
-        quality=quality,
-    )
-
-    processed_path = (
-        root
-        / "processed.png"
-    )
-
-    cv2.imwrite(
-        str(processed_path),
-        processed,
-    )
-
-    fov_path = ""
-
-    if fov_mask is not None:
-
-        fov_path_obj = (
-            root
-            / "fov_mask.png"
-        )
-
-        cv2.imwrite(
-            str(fov_path_obj),
-            fov_mask,
-        )
-
-        fov_path = str(
-            fov_path_obj
-        )
-
-    lesion_path = ""
-
-    combined = (
-        _combined_lesion_mask(
-            lesion_mask
-        )
-    )
-
-    if combined is not None:
-
-        lesion_path_obj = (
-            root
-            / "lesion_mask.png"
-        )
-
-        cv2.imwrite(
-            str(lesion_path_obj),
-            combined * 255,
-        )
-
-        lesion_path = str(
-            lesion_path_obj
-        )
-
-    return (
-        str(processed_path),
-        lesion_path,
-    )
-
-
-# ============================================================
-# FAIL-SAFE BLOCKS
-# ============================================================
-
-def _empty_grading():
-
+def _empty_grading() -> dict[str, Any]:
     return {
         "icdr_grade": None,
         "grade_label": None,
-        "probabilities": [
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-        ],
+        "probabilities": [0.0] * 5,
         "referable_dr": False,
         "confidence": 0.0,
         "uncertain": True,
@@ -891,8 +148,16 @@ def _empty_grading():
     }
 
 
-def _empty_xai():
+def _empty_lesions() -> dict[str, Any]:
+    return {
+        "mask_path": "",
+        "counts": {"microaneurysms": 0, "haemorrhages": 0, "hard_exudates": 0, "soft_exudates": 0},
+        "area_fraction": {"hard_exudates": 0.0, "haemorrhages": 0.0},
+        "model_version": None,
+    }
 
+
+def _empty_xai() -> dict[str, Any]:
     return {
         "gradcam_path": None,
         "overlay_path": None,
@@ -902,463 +167,341 @@ def _empty_xai():
     }
 
 
-# ============================================================
-# ANSHIKA — XAI
-# ============================================================
+def _normalise_quality(raw: Any) -> dict[str, Any]:
+    if not isinstance(raw, dict):
+        return _empty_quality()
+    scores = raw.get("scores") or {}
+    verdict = raw.get("verdict", "RETAKE")
+    if verdict not in {"PASS", "AUTO_CORRECTED", "RETAKE"}:
+        verdict = "RETAKE"
+    return {
+        "verdict": verdict,
+        "scores": {
+            "blur": float(scores.get("blur", 0.0)),
+            "illumination": float(scores.get("illumination", 0.0)),
+            "fov_coverage": float(scores.get("fov_coverage", 0.0)),
+            "contrast": float(scores.get("contrast", 0.0)),
+            "centre_offset": float(scores.get("centre_offset", 0.0)),
+        },
+        "reasons": list(raw.get("reasons") or []),
+        "operator_message_key": str(raw.get("operator_message_key", "")),
+        "enhancement_applied": list(raw.get("enhancement_applied") or []),
+        **({"processing_ms": int(raw["processing_ms"])} if "processing_ms" in raw else {}),
+        **({"work_size": list(raw["work_size"])} if "work_size" in raw else {}),
+    }
+
+
+def _normalise_lesions(raw: Any) -> dict[str, Any]:
+    if not isinstance(raw, dict):
+        return _empty_lesions()
+    counts = raw.get("counts") or {}
+    area = raw.get("area_fraction") or {}
+    return {
+        "mask_path": raw.get("mask_path", "") or "",
+        "counts": {
+            "microaneurysms": int(counts.get("microaneurysms", 0)),
+            "haemorrhages": int(counts.get("haemorrhages", 0)),
+            "hard_exudates": int(counts.get("hard_exudates", 0)),
+            "soft_exudates": int(counts.get("soft_exudates", 0)),
+        },
+        "area_fraction": {
+            "hard_exudates": float(area.get("hard_exudates", 0.0)),
+            "haemorrhages": float(area.get("haemorrhages", 0.0)),
+        },
+        "model_version": raw.get("model_version"),
+    }
+
+
+def _normalise_mask(mask: Any) -> np.ndarray | None:
+    if mask is None:
+        return None
+    arr = np.asarray(mask)
+    if arr.ndim == 2:
+        return (arr > 0).astype(np.uint8)
+    if arr.ndim == 3:
+        if arr.shape[2] == 4:
+            return (arr > 0).astype(np.uint8)
+        if arr.shape[0] == 4:
+            return np.transpose(arr > 0, (1, 2, 0)).astype(np.uint8)
+    raise ValueError(f"Unsupported lesion mask shape: {arr.shape}")
+
+
+def _connected_components(mask: np.ndarray) -> int:
+    m = (mask > 0).astype(np.uint8)
+    if not m.size:
+        return 0
+    n, _, _, _ = cv2.connectedComponentsWithStats(m, connectivity=8)
+    return max(0, int(n) - 1)
+
+
+def _segmentation_output(raw: Any) -> tuple[dict[str, Any], np.ndarray | None]:
+    if isinstance(raw, tuple) and len(raw) == 2:
+        return _normalise_lesions(raw[0]), _normalise_mask(raw[1])
+    if not isinstance(raw, dict):
+        raise TypeError(f"Unsupported segmentation output: {type(raw).__name__}")
+
+    masks = raw.get("masks") or {}
+    stats = raw.get("statistics") or {}
+    names = {"MA": "microaneurysms", "HE": "haemorrhages", "EX": "hard_exudates", "SE": "soft_exudates"}
+    counts = {}
+    for short, name in names.items():
+        mask = masks.get(short)
+        counts[name] = _connected_components(np.asarray(mask)) if mask is not None else 0
+
+    area = {"hard_exudates": 0.0, "haemorrhages": 0.0}
+    for short, name in (("EX", "hard_exudates"), ("HE", "haemorrhages")):
+        pct = float((stats.get(short) or {}).get("percentage", 0.0))
+        area[name] = float(np.clip(pct / 100.0, 0.0, 1.0))
+
+    ordered = []
+    for short in ("MA", "HE", "EX", "SE"):
+        if short in masks:
+            a = np.asarray(masks[short])
+            if a.ndim == 2:
+                ordered.append((a > 0).astype(np.uint8))
+    stack = np.stack(ordered, axis=-1) if ordered else None
+    lesions = {"mask_path": "", "counts": counts, "area_fraction": area, "model_version": raw.get("model_version")}
+    return lesions, stack
+
+
+def _combined_mask(mask: np.ndarray | None) -> np.ndarray | None:
+    if mask is None:
+        return None
+    arr = np.asarray(mask)
+    if arr.ndim == 2:
+        return (arr > 0).astype(np.uint8)
+    if arr.ndim == 3:
+        if arr.shape[2] == 4:
+            return arr.any(axis=2).astype(np.uint8)
+        if arr.shape[0] == 4:
+            return arr.any(axis=0).astype(np.uint8)
+    return None
+
+
+def _resize_binary(mask: np.ndarray | None, shape_hw: tuple[int, int]) -> np.ndarray | None:
+    if mask is None:
+        return None
+    h, w = shape_hw
+    arr = _combined_mask(mask)
+    if arr is None:
+        return None
+    return cv2.resize(arr, (w, h), interpolation=cv2.INTER_NEAREST).astype(np.uint8)
+
+
+def _safe_quality(module: Any, bgr: np.ndarray, fov_path: str | None) -> tuple[dict[str, Any], np.ndarray | None]:
+    try:
+        fn = getattr(module, "assess_quality")
+        kwargs = {}
+        if fov_path is not None:
+            kwargs["fov_mask_path"] = fov_path
+        raw = fn(bgr, **kwargs)
+        if not isinstance(raw, dict):
+            raise TypeError("IQA output must be a dictionary")
+        mask = raw.get("_mask")
+        return _normalise_quality(raw), (np.asarray(mask).astype(np.uint8) if mask is not None else None)
+    except TypeError:
+        # Compatibility with stubs/older implementations that do not accept kwargs.
+        try:
+            raw = module.assess_quality(bgr)
+            mask = raw.get("_mask") if isinstance(raw, dict) else None
+            return _normalise_quality(raw), (np.asarray(mask).astype(np.uint8) if mask is not None else None)
+        except Exception:
+            logger.exception("IQA stage failed")
+            return _empty_quality(), None
+    except Exception:
+        logger.exception("IQA stage failed")
+        return _empty_quality(), None
+
+
+def _safe_enhance(bgr: np.ndarray, quality: dict[str, Any]) -> np.ndarray:
+    try:
+        return enhance(bgr, quality=quality)
+    except TypeError:
+        return enhance(bgr)
+    except Exception:
+        logger.exception("Enhancement failed; using original image")
+        return bgr
+
+
+def _safe_grade(model: Any, bgr: np.ndarray) -> dict[str, Any]:
+    try:
+        result = model.grade(bgr)
+        if not isinstance(result, dict):
+            raise TypeError("grading output must be a dictionary")
+        return result
+    except Exception:
+        logger.exception("Grading stage failed")
+        return _empty_grading()
+
+
+def _safe_segment(model: Any, bgr: np.ndarray) -> tuple[dict[str, Any], np.ndarray | None]:
+    try:
+        return _segmentation_output(model.segment(bgr))
+    except Exception:
+        logger.exception("Segmentation stage failed; continuing without lesions")
+        return _empty_lesions(), None
+
+
+def _normalise_xai(raw: Any) -> dict[str, Any]:
+    if not isinstance(raw, dict):
+        raise TypeError("XAI output must be a dictionary")
+    status = raw.get("guard_status", "LOW_AGREEMENT")
+    if status not in {"OK", "CAM_OFF_RETINA", "LOW_AGREEMENT"}:
+        status = "LOW_AGREEMENT"
+    def opt_float(v):
+        try:
+            return None if v is None else float(v)
+        except (TypeError, ValueError):
+            return None
+    return {
+        "gradcam_path": raw.get("gradcam_path"),
+        "overlay_path": raw.get("overlay_path"),
+        "cam_lesion_agreement": opt_float(raw.get("cam_lesion_agreement")),
+        "cam_outside_fov_fraction": opt_float(raw.get("cam_outside_fov_fraction")),
+        "guard_status": status,
+    }
+
 
 def _safe_xai(
-    bgr: np.ndarray,
+    raw_bgr: np.ndarray,
+    display_bgr: np.ndarray,
     grading: dict[str, Any],
     lesion_mask: np.ndarray | None,
     fov_mask: np.ndarray | None,
     grading_model: Any,
     xai_mode: str,
+    screening_id: str,
+    output_dir: str | Path | None,
 ) -> dict[str, Any]:
-
     try:
-
-        xai = _load_model_object(
-            "xai",
-            xai_mode,
-        )
-
-        fn = getattr(
-            xai,
-            "explain",
-            None,
-        )
-
+        xai_module = _load_model_object("xai", xai_mode)
+        fn = getattr(xai_module, "explain", None)
         if fn is None:
-            raise AttributeError(
-                "XAI module must expose explain()."
-            )
+            raise AttributeError("XAI module must expose explain()")
 
-        # Real Anshika contract:
-        #
-        # explain(
-        #     bgr,
-        #     model_handle,
-        #     grading,
-        #     lesion_mask,
-        #     fov_mask
-        # )
+        if xai_mode != "real":
+            return _normalise_xai(fn(display_bgr, grading=grading, lesion_mask=lesion_mask, fov_mask=fov_mask))
 
-        if xai_mode == "real":
+        if grading_model is None or not hasattr(grading_model, "model"):
+            raise RuntimeError("Real XAI requires a loaded grading model")
 
-            # explain.py's GradCAM needs the raw nn.Module, the target
-            # layer name, the device, and a preprocess(bgr) -> tensor
-            # callable that matches training -- not just the grading
-            # model object itself.
-            model_handle = {
-                "model": getattr(
-                    grading_model,
-                    "model",
-                    grading_model,
-                ),
-                "layer_name": getattr(
-                    grading_model,
-                    "gradcam_layer",
-                    "features",
-                ),
-                "device": getattr(
-                    grading_model,
-                    "device",
-                    "cpu",
-                ),
-                "preprocess": getattr(
-                    grading_model,
-                    "preprocess",
-                    None,
-                ),
-            }
+        size = int(getattr(grading_model, "checkpoint_image_size", 384))
+        xai_image = cv2.resize(display_bgr, (size, size), interpolation=cv2.INTER_AREA)
+        xai_fov = _resize_binary(fov_mask, (size, size))
+        xai_lesions = _resize_binary(lesion_mask, (size, size))
 
-            raw = fn(
-                bgr,
-                model_handle,
-                grading,
-                lesion_mask,
-                fov_mask,
-            )
+        # Kanchan's preprocess() already performs the exact training-time
+        # enhancement. Ignore the display image here and use raw_bgr so the
+        # Grad-CAM input is identical to the grading input.
+        def exact_grading_preprocess(_unused_image):
+            return grading_model.preprocess(raw_bgr)
 
-        else:
+        handle = {
+            "model": grading_model.model,
+            "layer_name": getattr(grading_model, "gradcam_layer", "features.8"),
+            "device": grading_model.device,
+            "preprocess": exact_grading_preprocess,
+            "variant": "gradcam",
+        }
 
-            raw = fn(
-                bgr,
-                grading=grading,
-                lesion_mask=lesion_mask,
-                fov_mask=fov_mask,
-            )
-
-        return _normalise_xai(
-            raw
-        )
-
+        kwargs = {
+            "out_dir": str(output_dir or (PROJECT_ROOT / "artifacts" / "xai")),
+            "screening_id": screening_id,
+        }
+        try:
+            raw = fn(xai_image, handle, grading, xai_lesions, xai_fov, **kwargs)
+        except TypeError:
+            raw = fn(xai_image, handle, grading, xai_lesions, xai_fov)
+        return _normalise_xai(raw)
     except Exception:
-
-        logger.exception(
-            "XAI stage failed. "
-            "Continuing without XAI."
-        )
-
+        logger.exception("XAI stage failed; continuing without XAI")
         return _empty_xai()
 
 
-def _normalise_xai(
-    raw: Any,
-) -> dict[str, Any]:
-
-    if not isinstance(
-        raw,
-        dict,
-    ):
-        raise TypeError(
-            "XAI output must be a dictionary."
-        )
-
-    status = raw.get(
-        "guard_status",
-        "LOW_AGREEMENT",
-    )
-
-    if status not in {
-        "OK",
-        "CAM_OFF_RETINA",
-        "LOW_AGREEMENT",
-    }:
-
-        status = "LOW_AGREEMENT"
-
-    return {
-        "gradcam_path": raw.get(
-            "gradcam_path"
-        ),
-
-        "overlay_path": raw.get(
-            "overlay_path"
-        ),
-
-        "cam_lesion_agreement":
-            _optional_float(
-                raw.get(
-                    "cam_lesion_agreement"
-                )
-            ),
-
-        "cam_outside_fov_fraction":
-            _optional_float(
-                raw.get(
-                    "cam_outside_fov_fraction"
-                )
-            ),
-
-        "guard_status": status,
-    }
+def _set_image_paths(result: dict[str, Any], image_path: str | Path, bgr: np.ndarray, processed_path: str, fov_path: str) -> None:
+    result["image"].update({
+        "raw_path": str(image_path),
+        "processed_path": processed_path,
+        "width": int(bgr.shape[1]),
+        "height": int(bgr.shape[0]),
+        "fov_mask_path": fov_path,
+    })
 
 
-def _optional_float(
-    value: Any,
-) -> float | None:
-
-    if value is None:
-        return None
-
+def _persist(result: dict[str, Any], cfg: dict[str, Any]) -> None:
     try:
-        return float(value)
-
-    except (
-        TypeError,
-        ValueError,
-    ):
-        return None
-
-
-# ======================
-# ============================================================
-# SCREENING ORCHESTRATOR
-# ============================================================
-
-def _empty_quality():
-    return {
-        "verdict": "RETAKE",
-        "scores": {
-            "blur": 0.0,
-            "illumination": 0.0,
-            "fov_coverage": 0.0,
-            "contrast": 0.0,
-            "artefact": 0.0,
-        },
-        "reasons": [],
-        "operator_message_key": "",
-        "enhancement_applied": [],
-    }
-
-
-def _safe_quality(
-    module: Any,
-    bgr: np.ndarray,
-) -> dict[str, Any]:
-
-    try:
-        fn = getattr(module, "assess_quality", None)
-
-        if fn is None:
-            raise AttributeError(
-                "IQA module must expose assess_quality()."
-            )
-
-        raw = fn(bgr)
-
-        if not isinstance(raw, dict):
-            raise TypeError(
-                "IQA output must be a dictionary."
-            )
-
-        return raw
-
+        from db.dao import save_screening
+        db_path = (cfg.get("database") or {}).get("path")
+        if db_path:
+            save_screening(result, db_path=db_path)
+        else:
+            save_screening(result)
     except Exception:
-        logger.exception(
-            "IQA stage failed. Treating image as RETAKE."
-        )
-
-        return _empty_quality()
+        logger.exception("Database persistence failed")
 
 
-def _safe_enhance(
-    bgr: np.ndarray,
-    quality: dict[str, Any],
-) -> np.ndarray:
-
+def _longitudinal(result: dict[str, Any], cfg: dict[str, Any]) -> dict[str, Any]:
     try:
-        # Use the shared preprocessing implementation.
-        return enhance(
-            bgr,
-            quality=quality,
-        )
-
-    except TypeError:
-        # Compatibility with current implementations
-        # exposing enhance(bgr).
-        return enhance(bgr)
-
+        from db.dao import compare_with_prior
+        db_path = (cfg.get("database") or {}).get("path")
+        return compare_with_prior(result["patient_id"], result, db_path=db_path) if db_path else compare_with_prior(result["patient_id"], result)
     except Exception:
-        logger.exception(
-            "Enhancement failed. Using original image."
-        )
-        return bgr
+        logger.exception("Longitudinal comparison failed")
+        return {"prior_screening_id": None, "prior_grade": None, "delta": None, "trend": "FIRST_VISIT"}
 
 
-def _safe_grading(
-    model: Any,
-    bgr: np.ndarray,
-) -> dict[str, Any]:
-
+def _routing(result: dict[str, Any], cfg: dict[str, Any], thresholds: dict[str, Any]) -> dict[str, Any]:
     try:
-        result = _call_grade(
-            model,
-            bgr,
-        )
-
-        if not isinstance(result, dict):
-            raise TypeError(
-                "Grading output must be a dictionary."
-            )
-
-        return result
-
+        from db.dao import compute_routing
+        return compute_routing(result, thresholds)
     except Exception:
-        logger.exception(
-            "Grading stage failed."
-        )
-        return _empty_grading()
-
-
-def _safe_segmentation(
-    model: Any,
-    bgr: np.ndarray,
-) -> tuple[
-    dict[str, Any],
-    np.ndarray | None,
-]:
-
-    try:
-        return _call_segment(
-            model,
-            bgr,
-        )
-
-    except Exception:
-        logger.exception(
-            "Segmentation stage failed. "
-            "Continuing without lesions."
-        )
-
-        return (
-            {
-                "mask_path": "",
-                "counts": {
-                    "microaneurysms": 0,
-                    "haemorrhages": 0,
-                    "hard_exudates": 0,
-                    "soft_exudates": 0,
-                },
-                "area_fraction": {
-                    "hard_exudates": 0.0,
-                    "haemorrhages": 0.0,
-                },
-                "model_version": None,
-            },
-            None,
-        )
-
-
-def _normalise_quality(
-    quality: Any,
-) -> dict[str, Any]:
-
-    if not isinstance(quality, dict):
-        return _empty_quality()
-
-    scores = quality.get("scores") or {}
-
-    verdict = quality.get(
-        "verdict",
-        "RETAKE",
-    )
-
-    if verdict not in {
-        "PASS",
-        "AUTO_CORRECTED",
-        "RETAKE",
-    }:
-        verdict = "RETAKE"
-
-    return {
-        "verdict": verdict,
-        "scores": {
-            "blur": float(scores.get("blur", 0.0)),
-            "illumination": float(
-                scores.get("illumination", 0.0)
-            ),
-            "fov_coverage": float(
-                scores.get("fov_coverage", 0.0)
-            ),
-            "contrast": float(
-                scores.get("contrast", 0.0)
-            ),
-            "artefact": float(
-                scores.get("artefact", 0.0)
-            ),
-        },
-        "reasons": list(
-            quality.get("reasons") or []
-        ),
-        "operator_message_key": quality.get(
-            "operator_message_key",
-            "",
-        ),
-        "enhancement_applied": list(
-            quality.get(
-                "enhancement_applied",
-                [],
-            )
-            or []
-        ),
-    }
-
-
-def _get_fov_mask(
-    quality: dict[str, Any],
-    bgr: np.ndarray,
-) -> np.ndarray | None:
-
-    # Prefer a mask path supplied by IQA.
-    path = quality.get(
-        "fov_mask_path"
-    )
-
-    if path:
+        # Keep the inference module runnable before Divyanshu's DB layer is
+        # merged. Once db.dao is present, that implementation remains the
+        # source of truth for routing.
         try:
-            mask = cv2.imread(
-                str(path),
-                cv2.IMREAD_GRAYSCALE,
-            )
-
-            if mask is not None:
-                return mask
+            grading = result.get("grading") or {}
+            xai = result.get("xai") or {}
+            conditions = result.get("other_conditions") or {}
+            rcfg = thresholds.get("routing") or {}
+            grade = grading.get("icdr_grade")
+            confidence = float(grading.get("confidence", 0.0) or 0.0)
+            urgent_grade = int(rcfg.get("urgent_grade", 4))
+            urgent_g3 = float(rcfg.get("urgent_grade_3_confidence", 0.70))
+            referable_grade = int(rcfg.get("referable_grade", 2))
+            low_conf = float(rcfg.get("low_confidence", 0.55))
+            if grade is not None and int(grade) >= urgent_grade:
+                action, reason = "URGENT_REFERRAL", "URGENT_GRADE"
+            elif grade is not None and int(grade) == 3 and confidence >= urgent_g3:
+                action, reason = "URGENT_REFERRAL", "GRADE_3_HIGH_CONFIDENCE"
+            elif grade is not None and int(grade) >= referable_grade:
+                action, reason = "REVIEW", "REFERABLE_DR"
+            elif confidence < low_conf:
+                action, reason = "REVIEW", "LOW_CONFIDENCE"
+            elif (xai.get("guard_status") or "OK") != "OK":
+                action, reason = "REVIEW", "XAI_GUARD"
+            elif bool((conditions.get("glaucoma_suspect") or {}).get("flag", False)):
+                action, reason = "REVIEW", "GLAUCOMA_SUSPECT"
+            else:
+                action, reason = "ROUTINE", "NO_REFERRAL_CRITERIA"
+            return {"action": action, "reason": reason, "alert_sent": False, "sync_status": "PENDING"}
         except Exception:
-            logger.exception(
-                "Unable to load FOV mask."
-            )
-
-    # Current IQA implementation may expose FOV
-    # functionality through core.iqa.fov.
-    try:
-        fov_module = importlib.import_module(
-            "core.iqa.fov"
-        )
-
-        for fn_name in (
-            "get_fov_mask",
-            "fov_mask",
-            "create_fov_mask",
-            "detect_fov",
-        ):
-
-            fn = getattr(
-                fov_module,
-                fn_name,
-                None,
-            )
-
-            if callable(fn):
-
-                try:
-                    mask = fn(bgr)
-
-                    if mask is not None:
-                        return np.asarray(
-                            mask
-                        ).astype(
-                            np.uint8
-                        )
-                except Exception:
-                    continue
-
-    except Exception:
-        pass
-
-    return None
+            logger.exception("Fallback routing computation failed")
+            return {"action": "REVIEW", "reason": "ROUTING_ERROR", "alert_sent": False, "sync_status": "PENDING"}
 
 
-def _update_image_block(
-    result: dict[str, Any],
-    image_path: str | Path,
-    bgr: np.ndarray,
-    processed_path: str = "",
-    fov_mask_path: str = "",
-):
-
-    image = result["image"]
-
-    image["raw_path"] = str(
-        image_path
-    )
-
-    image["processed_path"] = (
-        processed_path
-    )
-
-    image["width"] = int(
-        bgr.shape[1]
-    )
-
-    image["height"] = int(
-        bgr.shape[0]
-    )
-
-    image["fov_mask_path"] = (
-        fov_mask_path
-    )
+def _save_artifacts(screening_id: str, raw_bgr: np.ndarray, processed: np.ndarray, fov_mask: np.ndarray | None, output_dir: str | Path | None) -> tuple[str, str]:
+    if output_dir is None:
+        return "", ""
+    root = Path(output_dir) / screening_id
+    root.mkdir(parents=True, exist_ok=True)
+    processed_path = root / "processed.png"
+    cv2.imwrite(str(processed_path), processed)
+    fov_path = ""
+    if fov_mask is not None:
+        fov_path_obj = root / "fov_mask.png"
+        cv2.imwrite(str(fov_path_obj), fov_mask)
+        fov_path = str(fov_path_obj)
+    return str(processed_path), fov_path
 
 
 def run_screening(
@@ -1370,411 +513,103 @@ def run_screening(
     phc_id: str = "",
     output_dir: str | Path | None = "data/captures",
 ) -> dict[str, Any]:
-    """
-    Run the complete NETRA screening pipeline.
-
-    The orchestrator is deliberately fail-soft:
-    individual model failures do not crash the complete screening.
-
-    RETAKE exits immediately after IQA.
-    """
-
+    """Run one complete offline screening and return ScreeningResult."""
     total_start = time.perf_counter()
-
     cfg = cfg or load_config()
-
     thresholds = load_thresholds()
+    result = new_result(patient_id, eye, operator_id=operator_id, phc_id=phc_id)
+    bgr = load_image(image_path)
 
-    result = new_result(
-        patient_id,
-        eye,
-        operator_id=operator_id,
-        phc_id=phc_id,
-    )
+    result["image"]["raw_path"] = str(image_path)
+    result["image"]["width"] = int(bgr.shape[1])
+    result["image"]["height"] = int(bgr.shape[0])
 
-    # --------------------------------------------------------
-    # IMAGE LOAD
-    # --------------------------------------------------------
-
-    bgr = load_image(
-        image_path
-    )
-
-    result["image"]["raw_path"] = str(
-        image_path
-    )
-    result["image"]["width"] = int(
-        bgr.shape[1]
-    )
-    result["image"]["height"] = int(
-        bgr.shape[0]
-    )
-
-    # --------------------------------------------------------
-    # IQA
-    # --------------------------------------------------------
-
+    # IQA: keep the private FOV mask for downstream XAI, but never serialise it.
     iqa_start = time.perf_counter()
-
-    iqa_mode = (
-        cfg.get("modules", {})
-        .get("iqa", "stub")
-    )
-
-    iqa_module = load_module(
-        "iqa",
-        iqa_mode,
-    )
-
-    quality = _safe_quality(
-        iqa_module,
-        bgr,
-    )
-
-    quality = _normalise_quality(
-        quality
-    )
-
+    iqa_mode = (cfg.get("modules") or {}).get("iqa", "stub")
+    iqa_module = load_module("iqa", iqa_mode)
+    fov_path_hint = None
+    if output_dir is not None:
+        fov_path_hint = str(Path(output_dir) / result["screening_id"] / "fov_mask.png")
+    quality, fov_mask = _safe_quality(iqa_module, bgr, fov_path_hint)
     result["quality"] = quality
-
-    result["timings_ms"]["iqa"] = int(
-        (time.perf_counter() - iqa_start)
-        * 1000
-    )
-
-    # --------------------------------------------------------
-    # RETAKE EARLY EXIT
-    # --------------------------------------------------------
+    result["timings_ms"]["iqa"] = int((time.perf_counter() - iqa_start) * 1000)
 
     if quality["verdict"] == "RETAKE":
-
-        result["routing"] = {
-            "action": "ROUTINE",
-            "reason": "RETAKE_REQUESTED",
-            "alert_sent": False,
-            "sync_status": "PENDING",
-        }
-
-        result["timings_ms"]["total"] = int(
-            (time.perf_counter() - total_start)
-            * 1000
-        )
-
+        result["routing"] = {"action": "ROUTINE", "reason": "RETAKE_REQUESTED", "alert_sent": False, "sync_status": "PENDING"}
+        result["timings_ms"]["total"] = int((time.perf_counter() - total_start) * 1000)
         return result
 
-    # --------------------------------------------------------
-    # FOV
-    # --------------------------------------------------------
-
-    fov_mask = _get_fov_mask(
-        quality,
-        bgr,
-    )
-
-    # --------------------------------------------------------
-    # ENHANCEMENT
-    # --------------------------------------------------------
-
-    processed = _safe_enhance(
-        bgr,
-        quality,
-    )
-
-    # --------------------------------------------------------
-    # RUNTIME ARTIFACTS
-    # --------------------------------------------------------
-
-    processed_path = ""
-    lesion_path = ""
-
-    try:
-        processed_path, lesion_path = (
-            _save_runtime_artifacts(
-                result["screening_id"],
-                bgr,
-                quality,
-                fov_mask,
-                None,
-                output_dir,
-            )
-        )
-
-    except Exception:
-        logger.exception(
-            "Unable to save runtime artifacts."
-        )
-
-    fov_path = ""
-
-    if fov_mask is not None and output_dir is not None:
-
-        try:
-            root = (
-                Path(output_dir)
-                / result["screening_id"]
-            )
-
-            root.mkdir(
-                parents=True,
-                exist_ok=True,
-            )
-
-            fov_path_obj = (
-                root / "fov_mask.png"
-            )
-
-            cv2.imwrite(
-                str(fov_path_obj),
-                fov_mask,
-            )
-
-            fov_path = str(
-                fov_path_obj
-            )
-
-        except Exception:
-            logger.exception(
-                "Unable to save FOV mask."
-            )
-
-    _update_image_block(
-        result,
-        image_path,
-        bgr,
-        processed_path,
-        fov_path,
-    )
-
-    # --------------------------------------------------------
-    # GRADING
-    # --------------------------------------------------------
+    # Enhancement is used for UI/XAI display. Kanchan's grading wrapper also
+    # calls the same shared enhance() internally, so grading receives raw_bgr.
+    processed = _safe_enhance(bgr, quality)
+    processed_path, saved_fov_path = _save_artifacts(result["screening_id"], bgr, processed, fov_mask, output_dir)
+    _set_image_paths(result, image_path, bgr, processed_path, saved_fov_path)
 
     grading_start = time.perf_counter()
-
-    grading_mode = (
-        cfg.get("modules", {})
-        .get("grading", "stub")
-    )
-
+    grading_mode = (cfg.get("modules") or {}).get("grading", "stub")
+    grading_model = None
     try:
-        grading_model = _load_model_object(
-            "grading",
-            grading_mode,
-        )
-
-        grading = _safe_grading(
-            grading_model,
-            bgr,
-        )
-
+        grading_model = _load_model_object("grading", grading_mode)
+        result["grading"] = _safe_grade(grading_model, bgr)
     except Exception:
-        logger.exception(
-            "Unable to initialise grading."
-        )
-
-        grading_model = None
-        grading = _empty_grading()
-
-    result["grading"] = grading
-
-    result["timings_ms"]["grading"] = int(
-        (time.perf_counter() - grading_start)
-        * 1000
-    )
-
-    # --------------------------------------------------------
-    # SEGMENTATION
-    # --------------------------------------------------------
+        logger.exception("Unable to initialise grading model")
+        result["grading"] = _empty_grading()
+    result["timings_ms"]["grading"] = int((time.perf_counter() - grading_start) * 1000)
 
     segmentation_start = time.perf_counter()
-
-    segmentation_mode = (
-        cfg.get("modules", {})
-        .get("segmentation", "stub")
-    )
-
+    segmentation_mode = (cfg.get("modules") or {}).get("segmentation", "stub")
     segmentation_model = None
-
     try:
-        segmentation_model = _load_model_object(
-            "segmentation",
-            segmentation_mode,
-        )
-
-        lesions, lesion_mask = (
-            _safe_segmentation(
-                segmentation_model,
-                bgr,
-            )
-        )
-
+        segmentation_model = _load_model_object("segmentation", segmentation_mode)
+        lesions, lesion_mask = _safe_segment(segmentation_model, bgr)
     except Exception:
-        logger.exception(
-            "Unable to initialise segmentation."
-        )
-
-        lesions, lesion_mask = (
-            _safe_segmentation(
-                object(),
-                bgr,
-            )
-        )
-
+        logger.exception("Unable to initialise segmentation model")
+        lesions, lesion_mask = _empty_lesions(), None
     result["lesions"] = lesions
+    result["timings_ms"]["segmentation"] = int((time.perf_counter() - segmentation_start) * 1000)
 
-    result["timings_ms"]["segmentation"] = int(
-        (time.perf_counter() - segmentation_start)
-        * 1000
-    )
-
-    # Save combined lesion mask.
     if lesion_mask is not None and output_dir is not None:
-
-        try:
-            root = (
-                Path(output_dir)
-                / result["screening_id"]
-            )
-
-            root.mkdir(
-                parents=True,
-                exist_ok=True,
-            )
-
-            combined = _combined_lesion_mask(
-                lesion_mask
-            )
-
-            if combined is not None:
-
-                lesion_file = (
-                    root
-                    / "lesion_mask.png"
-                )
-
-                cv2.imwrite(
-                    str(lesion_file),
-                    combined * 255,
-                )
-
-                result["lesions"][
-                    "mask_path"
-                ] = str(lesion_file)
-
-        except Exception:
-            logger.exception(
-                "Unable to save lesion mask."
-            )
-
-    # --------------------------------------------------------
-    # XAI
-    # --------------------------------------------------------
+        root = Path(output_dir) / result["screening_id"]
+        root.mkdir(parents=True, exist_ok=True)
+        combined = _combined_mask(lesion_mask)
+        if combined is not None:
+            lesion_path = root / "lesion_mask.png"
+            cv2.imwrite(str(lesion_path), combined * 255)
+            result["lesions"]["mask_path"] = str(lesion_path)
 
     xai_start = time.perf_counter()
-
-    xai_mode = (
-        cfg.get("modules", {})
-        .get("xai", "stub")
-    )
-
-    xai = _safe_xai(
+    xai_mode = (cfg.get("modules") or {}).get("xai", "stub")
+    # XAI needs masks at its 384x384 Grad-CAM resolution; the adapter handles that.
+    result["xai"] = _safe_xai(
+        bgr,
         processed,
-        grading,
+        result["grading"],
         lesion_mask,
         fov_mask,
-        grading_model,
+        grading_model if grading_mode == "real" else None,
         xai_mode,
+        result["screening_id"],
+        output_dir,
     )
+    result["timings_ms"]["xai"] = int((time.perf_counter() - xai_start) * 1000)
 
-    result["xai"] = xai
-
-    result["timings_ms"]["xai"] = int(
-        (time.perf_counter() - xai_start)
-        * 1000
-    )
-
-    # --------------------------------------------------------
-    # LONGITUDINAL
-    # --------------------------------------------------------
-
+    # Optional CDR hook. Muskan's current quality.py does not yet implement it,
+    # so the contract remains at its default values until that handoff lands.
     try:
-        from db.dao import compare_with_prior
-
-        result["longitudinal"] = (
-            compare_with_prior(
-                patient_id,
-                result,
-            )
-        )
-
+        iqa_real = iqa_module if iqa_mode == "real" else None
+        cdr_fn = getattr(iqa_real, "cup_disc_ratio", None) if iqa_real else None
+        if callable(cdr_fn) and fov_mask is not None:
+            cdr = float(cdr_fn(processed, fov_mask))
+            result["other_conditions"]["glaucoma_suspect"] = {"cup_disc_ratio": cdr, "flag": cdr >= 0.60}
     except Exception:
-        logger.exception(
-            "Longitudinal comparison failed."
-        )
+        logger.exception("CDR calculation failed")
 
-        result["longitudinal"] = {
-            "prior_screening_id": None,
-            "prior_grade": None,
-            "delta": None,
-            "trend": "FIRST_VISIT",
-        }
-
-    # --------------------------------------------------------
-    # ROUTING
-    # --------------------------------------------------------
-
-    try:
-        from db.dao import compute_routing
-
-        result["routing"] = (
-            compute_routing(
-                result,
-                thresholds,
-            )
-        )
-
-    except Exception:
-        logger.exception(
-            "Routing computation failed."
-        )
-
-        result["routing"] = {
-            "action": "REVIEW",
-            "reason": "ROUTING_ERROR",
-            "alert_sent": False,
-            "sync_status": "PENDING",
-        }
-
-    # --------------------------------------------------------
-    # DATABASE
-    # --------------------------------------------------------
+    result["longitudinal"] = _longitudinal(result, cfg)
+    result["routing"] = _routing(result, cfg, thresholds)
 
     db_start = time.perf_counter()
-
-    try:
-        from db.dao import save_screening
-
-        save_screening(
-            result
-        )
-
-    except Exception:
-        logger.exception(
-            "Database persistence failed."
-        )
-
-    result["timings_ms"]["db"] = int(
-        (time.perf_counter() - db_start)
-        * 1000
-    )
-
-    # --------------------------------------------------------
-    # TOTAL
-    # --------------------------------------------------------
-
-    result["timings_ms"]["total"] = int(
-        (time.perf_counter() - total_start)
-        * 1000
-    )
-
+    _persist(result, cfg)
+    result["timings_ms"]["db"] = int((time.perf_counter() - db_start) * 1000)
+    result["timings_ms"]["total"] = int((time.perf_counter() - total_start) * 1000)
     return result
