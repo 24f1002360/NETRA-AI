@@ -30,6 +30,9 @@
   "capture.waiting": "Waiting…",
   "capture.analyse_both": "Analyse Both Eyes",
   "capture.file_rules": "JPG or PNG only, up to 10 MB each. Capture both eyes to enable analysis.",
+  "status.connecting": "Checking connection…",
+  "status.online": "Online",
+  "status.offline_ready": "Offline-ready",
 
   "quality.title": "Image Quality Check",
   "quality.scores.blur": "Sharpness",
