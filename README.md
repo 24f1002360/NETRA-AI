@@ -14,7 +14,7 @@
 - [System Architecture](#system-architecture)
 - [Tech Stack](#tech-stack)
 - [Current Results](#current-results)
-- [Repository Structure](#repository-structure)
+- [Demo](#Demo)
 - [Getting Started](#getting-started)
 - [Team](#team)
 - [Honest Limitations](#honest-limitations)
@@ -141,6 +141,15 @@ Full details and the evaluation harness live in [`docs/BENCHMARKS.md`](docs/BENC
 
 We report metrics honestly, including the ones that aren't good yet — e.g. microaneurysm segmentation is currently unreliable, which is *why* the CAM–lesion agreement guard fires often, and we treat that as a safety feature (route to a human) rather than hide it. Referable-DR sensitivity/specificity and external (Messidor-2) validation are marked **TBD** pending a labelled held-out set — we'd rather say "not yet measured" than quote an invented number.
 
+## Demo
+
+- **Live interface preview:** https://netra-ai-67lj.onrender.com  
+  This hosted preview demonstrates the NETRA-AI workflow and interface.
+
+- **Full real-model demo:** Run locally using the supplied checkpoints in `artifacts/`.  
+  The complete grading, segmentation, and explainability pipeline is verified on the demo laptop.
+
+- **Video walkthrough:** See the submitted demo video for the complete end-to-end real-model screening flow.
 
 ## Getting Started
 
