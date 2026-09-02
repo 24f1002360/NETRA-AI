@@ -99,13 +99,13 @@ netra-ai/
 ├── core/
 │   ├── contracts.py     Shared ScreeningResult schema (single source of truth)
 │   ├── inference.py     Orchestrator — wires every module into one screening
-│   ├── iqa/              Image quality + enhancement (Muskan)
-│   ├── models/            Grading (EfficientNet-B0) + segmentation (U-Net) (Kanchan)
-│   └── xai/                Grad-CAM + FOV / CAM–lesion guards (Anshika)
-├── db/           SQLite DAO, offline sync worker (Divyanshu)
+│   ├── iqa/              Image quality + enhancement
+│   ├── models/            Grading (EfficientNet-B0) + segmentation (U-Net)
+│   └── xai/                Grad-CAM + FOV / CAM–lesion guards
+├── db/           SQLite DAO, offline sync worker
 ├── alerts/       Emergency-referral alert queue/sender
 ├── matlab/       IQA prototyping, Deep Network Designer analysis, Simulink district model
-├── sim/          District-capacity simulation + result charts (Ishank)
+├── sim/          District-capacity simulation + result chart
 ├── eval/         Benchmark & XAI evaluation harness (`eval/run_all.py`)
 ├── configs/      app.yaml (runtime/module switches), thresholds.yaml, i18n
 ├── tests/        Contract, grading, segmentation, and XAI tests (run on every PR)
@@ -141,9 +141,6 @@ Full details and the evaluation harness live in [`docs/BENCHMARKS.md`](docs/BENC
 
 We report metrics honestly, including the ones that aren't good yet — e.g. microaneurysm segmentation is currently unreliable, which is *why* the CAM–lesion agreement guard fires often, and we treat that as a safety feature (route to a human) rather than hide it. Referable-DR sensitivity/specificity and external (Messidor-2) validation are marked **TBD** pending a labelled held-out set — we'd rather say "not yet measured" than quote an invented number.
 
-## Repository Structure
-
-See [`docs/00_MASTER_PLAN.md`](docs/00_MASTER_PLAN.md) for the full implementation plan, module ownership, timeline, and working rhythm, and [`docs/01_INTERFACE_CONTRACTS.md`](docs/01_INTERFACE_CONTRACTS.md) for the shared data contracts every module reads/writes.
 
 ## Getting Started
 
