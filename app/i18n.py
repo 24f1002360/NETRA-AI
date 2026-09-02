@@ -38,7 +38,15 @@ def t(key, lang='en'):
         if value is not None:
             return value
 
-    return key
+    # Never reveal an implementation key (for example ``iqa.retake.blur_high``)
+    # to an operator. Known IQA failures get an actionable, localised fallback;
+    # every other missing label gets a neutral localised message instead.
+    fallback_key = (
+        "iqa.retake.unknown"
+        if str(key).startswith("iqa.")
+        else "ui.text_unavailable"
+    )
+    return _lookup(fallback_key, lang) or "Text unavailable"
 
 
 def bilingual(key, lang='en'):

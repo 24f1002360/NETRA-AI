@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>NETRA-AI Report — 4dcf4123</title>
+  <style>
+  @page { size: A4; margin: 18mm 16mm; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 11pt;
+         color: #111; background: #fff; line-height: 1.5; }
+  .header { display: flex; justify-content: space-between;
+            align-items: flex-end; border-bottom: 2px solid #1f3a5f;
+            padding-bottom: 10px; margin-bottom: 18px; }
+  .header h1 { font-size: 18pt; color: #1f3a5f; margin: 0; }
+  .header .meta { font-size: 9pt; color: #555; text-align: right; }
+  .section { margin-bottom: 16px; }
+  .section-title { font-size: 9pt; font-weight: bold; text-transform: uppercase;
+                   letter-spacing: 0.08em; color: #555;
+                   border-bottom: 1px solid #ddd; padding-bottom: 4px;
+                   margin-bottom: 8px; }
+  .kv-row { display: flex; gap: 8px; margin-bottom: 4px; font-size: 10.5pt; }
+  .kv-label { font-weight: bold; min-width: 140px; color: #333; }
+  .decision { padding: 12px 16px; border-radius: 6px; margin-bottom: 18px;
+              font-size: 12pt; font-weight: bold; }
+  .decision.routine { background: #e6f4ea; color: #2d5a27; border-left: 5px solid #2da44e; }
+  .decision.review  { background: #fef9e7; color: #7a5c00; border-left: 5px solid #e3b341; }
+  .decision.urgent  { background: #fce8e6; color: #7f2020; border-left: 5px solid #f85149; }
+  .grade-block { display: inline-block; padding: 8px 18px; border-radius: 8px;
+                 font-size: 22pt; font-weight: bold; margin-right: 14px;
+                 vertical-align: middle; }
+  .grade-0 { background: #e6f4ea; color: #2da44e; }
+  .grade-1 { background: #f0fce0; color: #57ab5a; }
+  .grade-2 { background: #fef9e7; color: #b08800; }
+  .grade-3 { background: #fce8e6; color: #c0392b; }
+  .grade-4 { background: #fce8e6; color: #8b0000; }
+  table { width: 100%; border-collapse: collapse; font-size: 10pt; }
+  th { background: #f0f4f8; color: #333; font-size: 9pt; text-transform: uppercase;
+       letter-spacing: 0.06em; padding: 7px 10px; text-align: left; }
+  td { padding: 7px 10px; border-bottom: 1px solid #eee; }
+  .footer { margin-top: 20px; padding-top: 10px; border-top: 1px solid #ccc;
+            font-size: 8pt; color: #888; text-align: center; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px;
+           font-size: 9pt; font-weight: bold; }
+  .badge-green { background: #e6f4ea; color: #2da44e; }
+  .badge-amber { background: #fef9e7; color: #b08800; }
+  .badge-red   { background: #fce8e6; color: #c0392b; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>NETRA-AI Screening Report</h1>
+    <div style="font-size:9pt;color:#555;margin-top:4px">
+      Diabetic Retinopathy Screening System
+    </div>
+  </div>
+  <div class="meta">
+    Screening ID: 4dcf4123-82c<br>
+    Generated: 2026-08-31 19:44 UTC
+  </div>
+</div>
+
+<!-- Decision -->
+<div class="decision review">
+  Refer to specialist for review
+</div>
+
+<!-- Patient info -->
+<div class="section">
+  <div class="section-title">Patient Information</div>
+  <div class="kv-row"><span class="kv-label">Patient ID:</span> PHC2-IS-2002</div>
+  <div class="kv-row"><span class="kv-label">Eye Screened:</span> OS</div>
+  <div class="kv-row"><span class="kv-label">Date of Capture:</span> 2026-08-31</div>
+  <div class="kv-row"><span class="kv-label">PHC:</span> PHC-99</div>
+  <div class="kv-row"><span class="kv-label">Operator ID:</span> OP-01</div>
+</div>
+
+<!-- Grading -->
+<div class="section">
+  <div class="section-title">DR Grading</div>
+  <p style="margin:8px 0">
+    <span class="grade-block grade-2">2</span>
+    <strong style="font-size:14pt">Moderate NPDR</strong>
+  </p>
+  <div class="kv-row">
+    <span class="kv-label">Confidence:</span>
+    68.0%
+    
+  </div>
+  <div class="kv-row">
+    <span class="kv-label">Referable DR:</span>
+    <span class="badge badge-red">Yes</span>
+  </div>
+  <div class="kv-row"><span class="kv-label">Model:</span>
+    effnetb0-dr (v0.4-int8)
+  </div>
+</div>
+
+<!-- Lesions -->
+<div class="section">
+  <div class="section-title">Lesions Detected</div>
+  <table>
+    <thead>
+      <tr><th>Lesion Type</th><th>Count</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Microaneurysms</td><td>14</td></tr>
+      <tr><td>Haemorrhages</td><td>6</td></tr>
+      <tr><td>Hard Exudates</td><td>9</td></tr>
+      <tr><td>Soft Exudates</td><td>1</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- XAI + Longitudinal -->
+<div class="section">
+  <div class="section-title">Evidence & Longitudinal Trend</div>
+  <div class="kv-row"><span class="kv-label">XAI Guard Status:</span> OK</div>
+  <div class="kv-row"><span class="kv-label">CAM-Lesion Agreement:</span> 71%</div>
+  <div class="kv-row"><span class="kv-label">Trend vs Prior:</span> First visit</div>
+  <div class="kv-row"><span class="kv-label">Prior Grade:</span>
+    No prior screening
+  </div>
+</div>
+
+<!-- Image quality -->
+<div class="section">
+  <div class="section-title">Image Quality</div>
+  <div class="kv-row"><span class="kv-label">Verdict:</span> PASS</div>
+  <div class="kv-row"><span class="kv-label">Enhancement:</span>
+    None
+  </div>
+</div>
+
+<div class="footer">
+  NETRA-AI v1.0 — AI-assisted screening only. Final diagnosis must be made by a qualified ophthalmologist.<br>
+  Model: EfficientNet-B0 + U-Net-Lite + Grad-CAM guard. Offline system — no patient data transmitted.
+</div>
+
+</body>
+</html>

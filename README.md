@@ -2,7 +2,7 @@
 
 **Team Aim Nexus** · Smart India Hackathon — **SIH26038** (MathWorks) · IIT Madras BS Degree Programme
 
-> A single-laptop, offline screening tool that lets a health worker capture a fundus photo, get an AI-assisted diabetic retinopathy grade with visual evidence, and route the patient correctly — in under 30 seconds, with no internet connection required.
+> A single-laptop, offline screening tool that lets a health worker capture a fundus photo, get an AI-assisted diabetic retinopathy grade with visual evidence, and receive a defined routing recommendation — with no internet connection required. The under-30-second target is being measured on the demo laptop.
 
 ---
 
@@ -44,7 +44,7 @@ ASHA/ANM                                                    District specialist
    ▼                                                                  │
 ┌───────────┐  ┌───────────┐  ┌────────────────┐  ┌───────────┐  ┌───┴────────┐
 │ 1 Capture │─▶│ 2 Quality │─▶│ 3 Grade +       │─▶│ 4 Explain │─▶│ 5 Report   │
-│  + voice  │  │   Gate    │  │   Segment       │  │  + Guard  │  │  + Route   │
+│  visual   │  │   Gate    │  │   Segment       │  │  + Guard  │  │  + Route   │
 └───────────┘  └────┬──────┘  └─────────────────┘  └───────────┘  └────┬───────┘
                      │ RETAKE                                          │
                      └──── back to Capture                             ▼
@@ -83,7 +83,7 @@ The project has moved past the scaffold stage into a working, testable, offline 
 | **Explainability & clinical safety** — Real Grad-CAM integration, FOV guard and CAM–lesion agreement guard, mask-resolution fixes, `docs/CLINICAL_ALIGNMENT.md` | Anshika | Delivered — guard logic actively demoted low-confidence cases to manual review during testing |
 | **Image quality assessment** — FOV detection, CLAHE-based enhancement, blur/contrast/illumination scoring, PASS/AUTO/RETAKE verdicts with reason codes | Muskan | Delivered — a working quality gate, not just a placeholder score |
 | **Simulation & QA tooling** — District-capacity SimEvents-style simulator, capacity/retake-sensitivity/specialist-load charts, synthetic degraded-image generator for stress-testing the quality gate | Ishank | Delivered — simulator runs and produces charts (see `sim/results/`) |
-| **UI/UX & integration** — Two-eye capture, quality, combined-result, report and history screens; camera/upload capture with visual-first design (usable without audio); real upload → screening → persisted-history flow; evidence images served with traversal protection | Abhishek | Delivered — connected to real team output, survives a server restart |
+| **UI/UX & integration** — Two-eye capture, quality, combined-result, printable report and history screens; camera/upload capture with visual-first design (usable without audio); real upload → screening → persisted-history flow; evidence images served with traversal protection | Abhishek | Delivered — connected to real team output, survives a server restart |
 
 **Validated locally:**
 - Full test suite passes: **38/38 tests**, ~102 s, on the demo laptop (Python 3.12.9, `torch 2.6.0+cpu`, `torchvision 0.21.0+cpu`).
@@ -99,13 +99,13 @@ netra-ai/
 ├── core/
 │   ├── contracts.py     Shared ScreeningResult schema (single source of truth)
 │   ├── inference.py     Orchestrator — wires every module into one screening
-│   ├── iqa/              Image quality + enhancement (Muskan)
-│   ├── models/            Grading (EfficientNet-B0) + segmentation (U-Net) (Kanchan)
-│   └── xai/                Grad-CAM + FOV / CAM–lesion guards (Anshika)
-├── db/           SQLite DAO, offline sync worker (Divyanshu)
+│   ├── iqa/              Image quality + enhancement
+│   ├── models/            Grading (EfficientNet-B0) + segmentation (U-Net)
+│   └── xai/                Grad-CAM + FOV / CAM–lesion guards
+├── db/           SQLite DAO, offline sync worker
 ├── alerts/       Emergency-referral alert queue/sender
 ├── matlab/       IQA prototyping, Deep Network Designer analysis, Simulink district model
-├── sim/          District-capacity simulation + result charts (Ishank)
+├── sim/          District-capacity simulation + result chart
 ├── eval/         Benchmark & XAI evaluation harness (`eval/run_all.py`)
 ├── configs/      app.yaml (runtime/module switches), thresholds.yaml, i18n
 ├── tests/        Contract, grading, segmentation, and XAI tests (run on every PR)
@@ -121,7 +121,7 @@ netra-ai/
 - **Image processing:** OpenCV, scikit-image, MATLAB Image Processing Toolbox
 - **MATLAB/Simulink:** Deep Network Designer (architecture/quantization analysis), SimEvents (district capacity model)
 - **Data & persistence:** SQLite, JSON Schema (contract validation)
-- **Reporting:** WeasyPrint (PDF report generation)
+- **Reporting:** self-contained HTML report, printable to PDF in the browser
 - **Testing:** pytest (contract, grading, segmentation, XAI tests)
 - **Simulation/analysis:** NumPy, Matplotlib, SciPy
 
@@ -141,9 +141,6 @@ Full details and the evaluation harness live in [`docs/BENCHMARKS.md`](docs/BENC
 
 We report metrics honestly, including the ones that aren't good yet — e.g. microaneurysm segmentation is currently unreliable, which is *why* the CAM–lesion agreement guard fires often, and we treat that as a safety feature (route to a human) rather than hide it. Referable-DR sensitivity/specificity and external (Messidor-2) validation are marked **TBD** pending a labelled held-out set — we'd rather say "not yet measured" than quote an invented number.
 
-## Repository Structure
-
-See [`docs/00_MASTER_PLAN.md`](docs/00_MASTER_PLAN.md) for the full implementation plan, module ownership, timeline, and working rhythm, and [`docs/01_INTERFACE_CONTRACTS.md`](docs/01_INTERFACE_CONTRACTS.md) for the shared data contracts every module reads/writes.
 
 ## Getting Started
 
