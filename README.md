@@ -2,7 +2,7 @@
 
 **Team Aim Nexus** · Smart India Hackathon — **SIH26038** (MathWorks) · IIT Madras BS Degree Programme
 
-> A single-laptop, offline screening tool that lets a health worker capture a fundus photo, get an AI-assisted diabetic retinopathy grade with visual evidence, and route the patient correctly — in under 30 seconds, with no internet connection required.
+> A single-laptop, offline screening tool that lets a health worker capture a fundus photo, get an AI-assisted diabetic retinopathy grade with visual evidence, and receive a defined routing recommendation — with no internet connection required. The under-30-second target is being measured on the demo laptop.
 
 ---
 
@@ -44,7 +44,7 @@ ASHA/ANM                                                    District specialist
    ▼                                                                  │
 ┌───────────┐  ┌───────────┐  ┌────────────────┐  ┌───────────┐  ┌───┴────────┐
 │ 1 Capture │─▶│ 2 Quality │─▶│ 3 Grade +       │─▶│ 4 Explain │─▶│ 5 Report   │
-│  + voice  │  │   Gate    │  │   Segment       │  │  + Guard  │  │  + Route   │
+│  visual   │  │   Gate    │  │   Segment       │  │  + Guard  │  │  + Route   │
 └───────────┘  └────┬──────┘  └─────────────────┘  └───────────┘  └────┬───────┘
                      │ RETAKE                                          │
                      └──── back to Capture                             ▼
@@ -83,7 +83,7 @@ The project has moved past the scaffold stage into a working, testable, offline 
 | **Explainability & clinical safety** — Real Grad-CAM integration, FOV guard and CAM–lesion agreement guard, mask-resolution fixes, `docs/CLINICAL_ALIGNMENT.md` | Anshika | Delivered — guard logic actively demoted low-confidence cases to manual review during testing |
 | **Image quality assessment** — FOV detection, CLAHE-based enhancement, blur/contrast/illumination scoring, PASS/AUTO/RETAKE verdicts with reason codes | Muskan | Delivered — a working quality gate, not just a placeholder score |
 | **Simulation & QA tooling** — District-capacity SimEvents-style simulator, capacity/retake-sensitivity/specialist-load charts, synthetic degraded-image generator for stress-testing the quality gate | Ishank | Delivered — simulator runs and produces charts (see `sim/results/`) |
-| **UI/UX & integration** — Two-eye capture, quality, combined-result, report and history screens; camera/upload capture with visual-first design (usable without audio); real upload → screening → persisted-history flow; evidence images served with traversal protection | Abhishek | Delivered — connected to real team output, survives a server restart |
+| **UI/UX & integration** — Two-eye capture, quality, combined-result, printable report and history screens; camera/upload capture with visual-first design (usable without audio); real upload → screening → persisted-history flow; evidence images served with traversal protection | Abhishek | Delivered — connected to real team output, survives a server restart |
 
 **Validated locally:**
 - Full test suite passes: **38/38 tests**, ~102 s, on the demo laptop (Python 3.12.9, `torch 2.6.0+cpu`, `torchvision 0.21.0+cpu`).
@@ -121,7 +121,7 @@ netra-ai/
 - **Image processing:** OpenCV, scikit-image, MATLAB Image Processing Toolbox
 - **MATLAB/Simulink:** Deep Network Designer (architecture/quantization analysis), SimEvents (district capacity model)
 - **Data & persistence:** SQLite, JSON Schema (contract validation)
-- **Reporting:** WeasyPrint (PDF report generation)
+- **Reporting:** self-contained HTML report, printable to PDF in the browser
 - **Testing:** pytest (contract, grading, segmentation, XAI tests)
 - **Simulation/analysis:** NumPy, Matplotlib, SciPy
 
