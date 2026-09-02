@@ -72,11 +72,15 @@
           <td>{{ s.date[:10] if s.date else '—' }}</td>
           <td><strong>{{ s.eye }}</strong></td>
           <td>
+            {% if s.analysis_available %}
             <span class="grade-pill g{{ grade_n }}">
               Grade {{ grade_n }}
             </span>
+            {% else %}
+            <span class="status-chip warn">{{ t('result.analysis_unavailable') }}</span>
+            {% endif %}
           </td>
-          <td>{{ (s.confidence * 100) | round(0) | int }}%</td>
+          <td>{% if s.analysis_available %}{{ (s.confidence * 100) | round(0) | int }}%{% else %}—{% endif %}</td>
           <td>
             <span class="action-pill {{ action_l }}">
               {% if action_l == 'urgent' %}🚨{% elif action_l == 'review' %}⚠{% else %}✓{% endif %}

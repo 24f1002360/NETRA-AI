@@ -30,6 +30,9 @@
   "capture.waiting": "காத்திருக்கிறது…",
   "capture.analyse_both": "இரு கண்களையும் பகுப்பாய்வு செய்யவும்",
   "capture.file_rules": "JPG அல்லது PNG மட்டும்; ஒவ்வொன்றும் 10 MB வரை. பகுப்பாய்விற்கு இரு கண்களும் தேவை.",
+  "status.connecting": "இணைப்பு சரிபார்க்கப்படுகிறது…",
+  "status.online": "ஆன்லைன்",
+  "status.offline_ready": "ஆஃப்லைனுக்குத் தயார்",
 
   "quality.title": "படத் தரப் பரிசோதனை",
   "quality.scores.blur": "தெளிவு",

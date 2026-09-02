@@ -30,6 +30,9 @@
   "capture.waiting": "వేచి ఉండండి…",
   "capture.analyse_both": "రెండు కళ్లను విశ్లేషించండి",
   "capture.file_rules": "JPG లేదా PNG మాత్రమే; ఒక్కోటి 10 MB వరకు. విశ్లేషణకు రెండు కళ్లూ అవసరం.",
+  "status.connecting": "కనెక్షన్‌ను తనిఖీ చేస్తున్నాం…",
+  "status.online": "ఆన్‌లైన్",
+  "status.offline_ready": "ఆఫ్‌లైన్‌కు సిద్ధం",
 
   "quality.title": "చిత్ర నాణ్యత తనిఖీ",
   "quality.scores.blur": "స్పష్టత",

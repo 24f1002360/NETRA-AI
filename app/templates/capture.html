@@ -22,9 +22,9 @@
 
 <!-- Status row -->
 <div class="status-row" role="status" aria-live="polite">
-  <div class="status-chip ok" id="status-offline">
+  <div class="status-chip ok" id="status-connectivity">
     <span class="status-chip__dot"></span>
-    Offline Mode
+    <span id="connectivity-status-text">{{ t('status.connecting') }}</span>
   </div>
   <div class="status-chip" id="status-camera">
     <span class="status-chip__dot"></span>
@@ -190,6 +190,23 @@
 
   var btnSubmit  = document.getElementById('btn-submit');
   var submitHint = document.getElementById('submit-hint');
+
+  /* ── Connectivity status ───────────────────────────── */
+  var connectivityChip = document.getElementById('status-connectivity');
+  var connectivityText = document.getElementById('connectivity-status-text');
+  var onlineLabel = {{ t('status.online') | tojson }};
+  var offlineLabel = {{ t('status.offline_ready') | tojson }};
+
+  function updateConnectivityStatus() {
+    var online = navigator.onLine;
+    connectivityChip.classList.toggle('ok', online);
+    connectivityChip.classList.toggle('warn', !online);
+    connectivityText.textContent = online ? onlineLabel : offlineLabel;
+  }
+
+  updateConnectivityStatus();
+  window.addEventListener('online', updateConnectivityStatus);
+  window.addEventListener('offline', updateConnectivityStatus);
 
   /* ── Camera status check ───────────────────────────── */
   var chipCam = document.getElementById('status-camera');

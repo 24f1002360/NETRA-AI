@@ -56,9 +56,11 @@
   <div class="decision-banner__icon">{{ tier_icon }}</div>
   <div class="decision-banner__body">
     <div class="decision-banner__action">
-      {{ t('result.action.' ~ tier) }}
+      {{ t('result.analysis_unavailable') if not result.analysis_available else t('result.action.' ~ tier) }}
     </div>
-    {% if result.action_reason %}
+    {% if not result.analysis_available %}
+    <div class="decision-banner__reason">{{ t('result.analysis_unavailable.detail') }}</div>
+    {% elif result.action_reason %}
     <div class="decision-banner__reason">
       Reason: {{ result.action_reason | replace('_', ' ') | title }}
     </div>
@@ -67,6 +69,7 @@
 </div>
 
 {# ── Grade + confidence ── #}
+{% if result.analysis_available %}
 <div class="grade-confidence-row">
   <div class="grade-box g{{ result.grade }}"
        aria-label="{{ t('result.grade') }}: {{ result.grade }} — {{ t('result.grade.' ~ result.grade) }}">
@@ -98,6 +101,15 @@
     {% endif %}
   </div>
 </div>
+{% else %}
+<div class="xai-guard-panel warn mb">
+  <div class="xai-guard-panel__icon">⚠️</div>
+  <div class="xai-guard-panel__body">
+    <div class="xai-guard-panel__title">{{ t('result.analysis_unavailable') }}</div>
+    <div class="xai-guard-panel__desc">{{ t('result.analysis_unavailable.detail') }}</div>
+  </div>
+</div>
+{% endif %}
 
 {# ── Image evidence ── #}
 {% set xai = result.xai if result.xai is defined else {} %}
@@ -167,7 +179,7 @@
   </div>
 
   {# XAI guard detail #}
-  {% if guard and guard != 'OK' %}
+  {% if result.analysis_available and guard and guard != 'OK' %}
   <div class="xai-guard-panel warn">
     <div class="xai-guard-panel__icon">⚠️</div>
     <div class="xai-guard-panel__body">
@@ -178,7 +190,7 @@
       </div>
     </div>
   </div>
-  {% elif guard == 'OK' %}
+  {% elif result.analysis_available and guard == 'OK' %}
   <div class="xai-guard-panel ok mt-s">
     <div class="xai-guard-panel__icon">✓</div>
     <div class="xai-guard-panel__body">
@@ -192,6 +204,7 @@
   {% endif %}
 </div>
 
+{% if result.analysis_available %}
 {# ── Lesions ── #}
 {% set lesions = result.lesions %}
 <div class="card card--flat mb" style="background:var(--surface-2)">
@@ -211,6 +224,7 @@
     {{ lesion_item('soft_exudates',  t('result.lesions.soft_exudates')) }}
   </div>
 </div>
+{% endif %}
 
 {# ── Other conditions ── #}
 {% set other = result.other_conditions if result.other_conditions is defined else {} %}

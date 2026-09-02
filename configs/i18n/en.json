@@ -30,6 +30,9 @@
   "capture.waiting": "Waiting…",
   "capture.analyse_both": "Analyse Both Eyes",
   "capture.file_rules": "JPG or PNG only, up to 10 MB each. Capture both eyes to enable analysis.",
+  "status.connecting": "Checking connection…",
+  "status.online": "Online",
+  "status.offline_ready": "Offline-ready",
 
   "quality.title": "Image Quality Check",
   "quality.scores.blur": "Sharpness",
@@ -93,6 +96,8 @@
   "result.action.routine": "No action needed — rescreen in 12 months",
   "result.action.review": "Refer to specialist for review",
   "result.action.urgent": "URGENT: Immediate ophthalmologist referral required",
+  "result.analysis_unavailable": "Automated analysis unavailable — manual review required",
+  "result.analysis_unavailable.detail": "The AI model was unavailable for this screening. Do not treat this as a diagnosis; refer the image for manual specialist review.",
   "result.download_pdf": "View / Print Report",
 
   "history.title": "Screening History",

@@ -35,11 +35,17 @@ def _for_result_view(screening: dict) -> dict:
     image = screening.get("image", {}) or {}
     xai = screening.get("xai", {}) or {}
 
+    # ``None`` is meaningful here: it is how the inference layer reports that
+    # the grading model could not be loaded.  Never coerce it to grade 0,
+    # because grade 0 means a real, healthy "No DR" model prediction.
+    analysis_available = grading.get("icdr_grade") is not None
+
     return {
         **screening,
         "timestamp":    screening.get("captured_at", ""),
-        "grade":        grading.get("icdr_grade", 0) or 0,
+        "grade":        grading.get("icdr_grade") if analysis_available else None,
         "confidence":   grading.get("confidence", 0.0) or 0.0,
+        "analysis_available": analysis_available,
         "lesions":      (screening.get("lesions", {}) or {}).get("counts", {}),
         "quality":      quality,
         "xai_agreement": (screening.get("xai", {}) or {}).get("guard_status") == "OK",
@@ -66,6 +72,7 @@ def _for_history_view(screenings: list) -> list:
             "grade":        v["grade"],
             "confidence":   v["confidence"],
             "action":       v["action_type"],
+            "analysis_available": v["analysis_available"],
         })
     return rows
 

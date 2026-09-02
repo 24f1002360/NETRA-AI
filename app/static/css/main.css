@@ -1091,6 +1091,7 @@ h3 { font-size: 1rem; font-weight: 600; color: var(--text-muted); margin-bottom:
 .eye-action-chip.routine { background: var(--green-dim); color: var(--green); }
 .eye-action-chip.review  { background: var(--amber-dim); color: var(--amber); }
 .eye-action-chip.urgent  { background: var(--red-dim);   color: var(--red); }
+.analysis-unavailable-note { color: var(--text-muted); font-size: .86rem; line-height: 1.45; margin: 12px 2px; }
 
 .lesion-grid.compact {
   grid-template-columns: repeat(4, 1fr);
