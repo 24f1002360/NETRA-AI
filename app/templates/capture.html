@@ -32,6 +32,16 @@
   </div>
 </div>
 
+{% if preview_only %}
+<div class="decision-banner review" role="alert">
+  <div class="decision-banner__icon">ℹ️</div>
+  <div class="decision-banner__body">
+    <div class="decision-banner__action">{{ t('preview.title') }}</div>
+    <div class="decision-banner__reason">{{ t('preview.detail') }}</div>
+  </div>
+</div>
+{% endif %}
+
 <div class="card">
   <h1 class="page-title">{{ bt('capture.new_screening') }}</h1>
   <p class="page-subtitle">{{ bt('capture.intro') }}</p>
@@ -169,11 +179,11 @@
 
     <!-- Submit -->
     <div class="mt-l">
-      <button type="submit" id="btn-submit" class="btn btn-teal btn-xl btn-full" disabled>
+      <button type="submit" id="btn-submit" class="btn btn-teal btn-xl btn-full" {% if preview_only %}disabled aria-disabled="true"{% else %}disabled{% endif %}>
         {{ bt('capture.analyse_both') }} →
       </button>
       <p class="text-subtle mt-s" style="font-size:.8rem;text-align:center" id="submit-hint">
-        {{ bt('capture.file_rules') }}
+        {{ t('preview.submit_hint') if preview_only else bt('capture.file_rules') }}
       </p>
     </div>
 
@@ -190,6 +200,7 @@
 
   var btnSubmit  = document.getElementById('btn-submit');
   var submitHint = document.getElementById('submit-hint');
+  var previewOnly = {{ preview_only | tojson }};
 
   /* ── Connectivity status ───────────────────────────── */
   var connectivityChip = document.getElementById('status-connectivity');
@@ -240,6 +251,10 @@
 
   /* ── Update submit button state ────────────────────── */
   function updateSubmitState() {
+    if (previewOnly) {
+      btnSubmit.disabled = true;
+      return;
+    }
     var ready = captured.od && captured.os;
     btnSubmit.disabled = !ready;
     if (ready) {
@@ -413,6 +428,12 @@
   document.getElementById('capture-form').addEventListener('submit', function(e) {
     var pid   = document.getElementById('patient_id').value.trim();
     var errEl = document.getElementById('form-error');
+
+    if (previewOnly) {
+      e.preventDefault();
+      showFormError({{ t('preview.detail') | tojson }});
+      return;
+    }
 
     if (!pid) {
       e.preventDefault();

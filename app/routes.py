@@ -1,4 +1,5 @@
 import uuid
+import os
 from pathlib import Path
 
 from flask import (
@@ -6,7 +7,6 @@ from flask import (
     request, session, jsonify, send_file, abort
 )
 from app.report import render_result
-from core.inference import run_screening
 from db.dao import get_history, get_screening as get_persisted_screening
 
 bp = Blueprint("main", __name__)
@@ -15,6 +15,17 @@ screening_bp = Blueprint("screening", __name__)
 # Short-lived cache for an active two-eye session. Individual records are
 # persisted by ``run_screening`` and can be restored from SQLite on demand.
 _results: dict = {}
+
+
+def _preview_only() -> bool:
+    """Return whether this process is the public interface-only preview."""
+    return os.getenv("NETRA_PREVIEW_ONLY", "").strip().lower() in {"1", "true", "yes"}
+
+
+def _run_screening(*args, **kwargs):
+    """Import the heavy inference stack only in a real-model runtime."""
+    from core.inference import run_screening
+    return run_screening(*args, **kwargs)
 
 
 # ── Data adapters ──────────────────────────────────────────────────────────────
@@ -119,11 +130,21 @@ def index():
 
 @bp.route("/capture")
 def capture():
-    return render_template("capture.html")
+    return render_template("capture.html", preview_only=_preview_only())
 
 
 @bp.route("/capture/upload", methods=["POST"])
 def capture_upload():
+    if _preview_only():
+        return render_template(
+            "_error.html",
+            title="Interface preview only",
+            detail=(
+                "This public preview does not process patient images. "
+                "Run NETRA-AI locally with the supplied model checkpoints for real analysis."
+            ),
+        ), 503
+
     patient_id = (request.form.get("patient_id") or "").strip() or "UNKNOWN"
     uploads = {
         "OD": request.files.get("image_od") or request.files.get("image_od_cam"),
@@ -159,7 +180,7 @@ def capture_upload():
             extension = Path(upload.filename).suffix.lower() or ".jpg"
             image_path = capture_dir / f"{uuid.uuid4().hex}{extension}"
             upload.save(image_path)
-            results[eye] = run_screening(
+            results[eye] = _run_screening(
                 image_path=image_path,
                 patient_id=patient_id,
                 eye=eye,
@@ -328,7 +349,10 @@ def create_screening():
     if not Path(image_path).exists():
         return jsonify({"error": "image not found"}), 404
 
-    result = run_screening(
+    if _preview_only():
+        return jsonify({"error": "interface preview only; real analysis runs locally"}), 503
+
+    result = _run_screening(
         image_path=image_path,
         patient_id=patient_id,
         eye=data.get("eye", "OD"),
