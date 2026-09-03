@@ -144,7 +144,7 @@ We report metrics honestly, including the ones that aren't good yet — e.g. mic
 ## Demo
 
 - **Live interface preview:** https://netra-ai-67lj.onrender.com  
-  This hosted preview demonstrates the NETRA-AI workflow and interface.
+  This hosted preview demonstrates the NETRA-AI interface only; it deliberately does not process patient images or make clinical predictions.
 
 - **Full real-model demo:** Run locally using the supplied checkpoints in `artifacts/`.  
   The complete grading, segmentation, and explainability pipeline is verified on the demo laptop.

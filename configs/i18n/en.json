@@ -33,6 +33,9 @@
   "status.connecting": "Checking connection…",
   "status.online": "Online",
   "status.offline_ready": "Offline-ready",
+  "preview.title": "Public interface preview",
+  "preview.detail": "For privacy and reliability, this hosted preview does not process patient images. Run NETRA-AI locally with the supplied checkpoints for real analysis.",
+  "preview.submit_hint": "Image analysis is available in the verified local demo.",
 
   "quality.title": "Image Quality Check",
   "quality.scores.blur": "Sharpness",

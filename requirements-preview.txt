@@ -1,0 +1,5 @@
+# Lightweight dependencies for the public Render interface preview.
+# The real-model laptop setup remains in requirements.txt.
+Flask>=3.0
+PyYAML>=6.0
+gunicorn>=21.2
